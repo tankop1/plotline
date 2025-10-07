@@ -1,0 +1,113 @@
+:root {
+  /* Palette (exactly as provided) */
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-light-gray: #efefef;
+  --color-orange: #f64e00;
+  --color-yellow: #ffbb00;
+
+  /* Theme variables (overridden per theme) */
+  --color-bg: var(--color-white);
+  --color-text: var(--color-black);
+  --color-surface: var(--color-light-gray);
+  --color-muted: rgba(0, 0, 0, 0.55); /* derived from black */
+  --color-link: var(--color-orange);
+  --color-link-hover: #cc4000; /* darker orange derived */
+}
+
+/* Layout sanity */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Light theme */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: var(--color-white);
+  --color-text: var(--color-black);
+  --color-surface: var(--color-light-gray);
+  --color-muted: rgba(0, 0, 0, 0.55);
+  --color-link: var(--color-orange);
+  --color-link-hover: #cc4000;
+}
+
+/* Dark theme */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: var(--color-black);
+  --color-text: var(--color-white);
+  --color-surface: #111111; /* near-black derived for contrast */
+  --color-muted: rgba(255, 255, 255, 0.65); /* derived from white */
+  --color-link: var(--color-yellow);
+  --color-link-hover: #e0a600;
+}
+
+:root {
+  font-family: "DM Sans", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: var(--color-link);
+  text-decoration: inherit;
+}
+a:hover {
+  color: var(--color-link-hover);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+/* Ensure all controls use DM Sans */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: border-color 0.25s, background-color 0.25s;
+}
+button:hover {
+  border-color: var(--color-link);
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* No media query toggle: theme is controlled via [data-theme] attribute */
