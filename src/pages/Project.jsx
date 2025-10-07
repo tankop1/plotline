@@ -28,6 +28,7 @@ function Project() {
     isCollapsed: true,
   });
   const editorRef = useRef(null);
+  const idCounterRef = useRef(8);
   const [selectedLineIds, setSelectedLineIds] = useState([]);
   const [lastClickedIndex, setLastClickedIndex] = useState(null);
 
@@ -42,36 +43,6 @@ function Project() {
     "general", // 7. General - same as action (left aligned)
   ];
 
-  // Selection and block utilities
-  const getClosestLineEl = (node) => {
-    let current = node;
-    while (current && current !== editorRef.current) {
-      if (
-        current.nodeType === Node.ELEMENT_NODE &&
-        current.hasAttribute &&
-        current.hasAttribute("data-line-index")
-      )
-        return current;
-      current = current.parentNode;
-    }
-    return null;
-  };
-
-  const computeSelectionRange = () => {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const aEl = getClosestLineEl(sel.anchorNode);
-    const fEl = getClosestLineEl(sel.focusNode);
-    if (!aEl || !fEl) return;
-    const a = parseInt(aEl.getAttribute("data-line-index"), 10);
-    const b = parseInt(fEl.getAttribute("data-line-index"), 10);
-    const start = Math.min(a, b);
-    const end = Math.max(a, b);
-    const isCollapsed = sel.isCollapsed && a === b;
-    setSelectionRange({ start, end, isCollapsed });
-    if (isCollapsed) setLastClickedIndex(start);
-  };
-
   const selectionStyles = useMemo(() => {
     const { start, end } = selectionRange;
     const set = new Set();
@@ -79,6 +50,124 @@ function Project() {
       set.add(lines[i].style);
     return set;
   }, [selectionRange, lines]);
+
+  const generateLineId = () => {
+    idCounterRef.current += 1;
+    return `l${idCounterRef.current}`;
+  };
+
+  // Refs to focus specific line inputs reliably
+  const lineRefs = useRef({});
+  // Drag selection state
+  const isMouseSelectingRef = useRef(false);
+  const selectionAnchorRef = useRef(null);
+
+  // Seed the ID counter from existing lines to avoid duplicates after edits
+  useEffect(() => {
+    const maxId = lines.reduce((max, ln) => {
+      const m = typeof ln.id === "string" && ln.id.match(/l(\d+)/);
+      const num = m ? parseInt(m[1], 10) : 0;
+      return Math.max(max, num);
+    }, 0);
+    if (idCounterRef.current < maxId) idCounterRef.current = maxId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Centralized Enter handling for all line inputs
+  const handleLineKeyDown = (e, idx) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const cursorPosition = e.target.selectionStart || 0;
+      const currentText = lines[idx].text;
+      const textBeforeCursor = currentText.substring(0, cursorPosition);
+      const textAfterCursor = currentText.substring(cursorPosition);
+
+      const newLine = {
+        id: generateLineId(),
+        text: textAfterCursor,
+        style: lines[idx].style, // Keep the same style as current line
+      };
+
+      setLines((prev) => {
+        const next = [...prev];
+        // Update current line with text before cursor
+        next[idx] = { ...next[idx], text: textBeforeCursor };
+        // Insert new line with text after cursor
+        next.splice(idx + 1, 0, newLine);
+        return next;
+      });
+
+      const newIndex = idx + 1;
+      setSelectionRange({ start: newIndex, end: newIndex, isCollapsed: true });
+      setLastClickedIndex(newIndex);
+
+      // Focus the newly created line after render
+      setTimeout(() => {
+        const nextRef = lineRefs.current[newLine.id];
+        if (nextRef && typeof nextRef.focus === "function") {
+          try {
+            nextRef.focus();
+            // Place cursor at beginning of new line
+            if (nextRef.setSelectionRange) nextRef.setSelectionRange(0, 0);
+          } catch {}
+        }
+      }, 0);
+    } else if (e.key === "Backspace") {
+      const cursorPosition = e.target.selectionStart || 0;
+      const selectionEnd = e.target.selectionEnd || 0;
+      const hasSelection = cursorPosition !== selectionEnd;
+
+      // Only do line deletion/merging if there's no text selection
+      if (
+        !hasSelection &&
+        (cursorPosition === 0 || lines[idx].text === "") &&
+        idx > 0
+      ) {
+        e.preventDefault();
+        const currentText = lines[idx].text;
+        setLines((prev) => {
+          const next = [...prev];
+          // Merge current line text with previous line
+          next[idx - 1] = {
+            ...next[idx - 1],
+            text: next[idx - 1].text + currentText,
+          };
+          // Remove current line
+          next.splice(idx, 1);
+          return next;
+        });
+        const newIndex = idx - 1;
+        setSelectionRange({
+          start: newIndex,
+          end: newIndex,
+          isCollapsed: true,
+        });
+        setLastClickedIndex(newIndex);
+        // Focus the previous line after render
+        setTimeout(() => {
+          const prevLineId = lines[newIndex]?.id;
+          const prevRef = prevLineId ? lineRefs.current[prevLineId] : null;
+          if (prevRef && typeof prevRef.focus === "function") {
+            try {
+              prevRef.focus();
+              // Move cursor to end of previous line's original text (before merged text)
+              if (prevRef.setSelectionRange) {
+                const prevOriginalTextLength =
+                  lines[newIndex]?.text?.length || 0;
+                prevRef.setSelectionRange(
+                  prevOriginalTextLength,
+                  prevOriginalTextLength
+                );
+              }
+            } catch {}
+          }
+        }, 0);
+      }
+      // If there's a selection, let the default behavior handle it (deleting selected text)
+    }
+  };
+
+  // contentEditable beforeinput no longer needed; using controlled inputs
 
   // Line-based style update (no grouping)
   const applyStyleToSelection = (formatType) => {
@@ -94,24 +183,44 @@ function Project() {
     setLines((prev) =>
       prev.map((ln) => (ids.has(ln.id) ? { ...ln, style: formatType } : ln))
     );
+
+    // Preserve cursor position in the currently focused line
+    setTimeout(() => {
+      const focusedElement = document.activeElement;
+      if (
+        focusedElement &&
+        focusedElement.tagName === "TEXTAREA" &&
+        focusedElement.hasAttribute("data-line-index")
+      ) {
+        // Restore focus to the same element to maintain cursor position
+        focusedElement.focus();
+      }
+    }, 0);
   };
 
-  const handleEditorClick = () => {
-    computeSelectionRange();
+  // Auto-resize textarea based on content
+  const autoResize = (textarea) => {
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = textarea.scrollHeight + "px";
+    }
+  };
+
+  // Centralized text update for lines
+  const handleLineChange = (e, idx) => {
+    const text = e.target.value.replace(/\n/g, "");
+    setLines((prev) => prev.map((ln, i) => (i === idx ? { ...ln, text } : ln)));
+    // Auto-resize the textarea
+    autoResize(e.target);
   };
 
   const setBrowserSelectionForLines = (start, end) => {
-    const container = editorRef.current;
-    if (!container) return;
-    const startEl = container.querySelector(`[data-line-index="${start}"]`);
-    const endEl = container.querySelector(`[data-line-index="${end}"]`);
-    if (!startEl || !endEl) return;
-    const range = document.createRange();
-    range.setStart(startEl, 0);
-    range.setEnd(endEl, endEl.childNodes.length);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
+    // With inputs, we keep logical selection only; no DOM selection spanning
+    // Focus the last selected input to keep UX consistent
+    const lastIdx = end;
+    const id = lines[lastIdx]?.id;
+    const ref = id ? lineRefs.current[id] : null;
+    if (ref && typeof ref.focus === "function") ref.focus();
   };
 
   const handleLineClick = (e, idx) => {
@@ -127,9 +236,37 @@ function Project() {
     }
   };
 
+  // Drag-select handlers on line wrapper
+  const handleDragMouseDown = (idx) => {
+    isMouseSelectingRef.current = true;
+    selectionAnchorRef.current = idx;
+    setSelectionRange({ start: idx, end: idx, isCollapsed: true });
+    setLastClickedIndex(idx);
+    const onMouseUp = () => {
+      isMouseSelectingRef.current = false;
+      selectionAnchorRef.current = null;
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    document.addEventListener("mouseup", onMouseUp);
+  };
+
+  const handleDragMouseEnter = (idx) => {
+    if (!isMouseSelectingRef.current) return;
+    const anchor = selectionAnchorRef.current;
+    if (anchor == null) return;
+    const start = Math.min(anchor, idx);
+    const end = Math.max(anchor, idx);
+    setSelectionRange({ start, end, isCollapsed: start === end });
+  };
+
   const handleToolClick = (toolType) => {
     applyStyleToSelection(toolType);
     setSelectedTool(toolType);
+  };
+
+  const handleToolMouseDown = (e) => {
+    // Prevent toolbar buttons from taking focus away from textarea
+    e.preventDefault();
   };
 
   // Project name editing handlers
@@ -181,46 +318,17 @@ function Project() {
     setSelectedLineIds(ids);
   }, [selectionRange, lines]);
 
-  // Listen to selection changes to update selectionRange
+  // Auto-resize textareas when lines change
   useEffect(() => {
-    const onSelectionChange = () => {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return;
-      const container = editorRef.current;
-      if (!container) return;
-      const range = sel.getRangeAt(0);
-      if (
-        !container.contains(range.startContainer) &&
-        !container.contains(range.endContainer)
-      )
-        return;
-      const aEl = (node) => {
-        let cur = node;
-        while (cur && cur !== container) {
-          if (
-            cur.nodeType === Node.ELEMENT_NODE &&
-            cur.hasAttribute &&
-            cur.hasAttribute("data-line-index")
-          )
-            return cur;
-          cur = cur.parentNode;
-        }
-        return null;
-      };
-      const sEl = aEl(sel.anchorNode);
-      const eEl = aEl(sel.focusNode);
-      if (!sEl || !eEl) return;
-      const a = parseInt(sEl.getAttribute("data-line-index"), 10);
-      const b = parseInt(eEl.getAttribute("data-line-index"), 10);
-      const start = Math.min(a, b);
-      const end = Math.max(a, b);
-      const isCollapsed = sel.isCollapsed && a === b;
-      setSelectionRange({ start, end, isCollapsed });
-    };
-    document.addEventListener("selectionchange", onSelectionChange);
-    return () =>
-      document.removeEventListener("selectionchange", onSelectionChange);
-  }, []);
+    lines.forEach((line) => {
+      const textarea = lineRefs.current[line.id];
+      if (textarea) {
+        autoResize(textarea);
+      }
+    });
+  }, [lines]);
+
+  // With controlled inputs, we drive selection via focus and shift-click
 
   return (
     <div className="project-page">
@@ -314,6 +422,7 @@ function Project() {
               }`}
               title="Location"
               onClick={() => handleToolClick("location")}
+              onMouseDown={handleToolMouseDown}
             >
               <i className="fa-solid fa-location-dot" />
             </button>
@@ -323,6 +432,7 @@ function Project() {
               }`}
               title="Action"
               onClick={() => handleToolClick("action")}
+              onMouseDown={handleToolMouseDown}
             >
               <i className="fa-solid fa-person-running" />
             </button>
@@ -332,6 +442,7 @@ function Project() {
               }`}
               title="Character"
               onClick={() => handleToolClick("character")}
+              onMouseDown={handleToolMouseDown}
             >
               <i className="fa-regular fa-user" />
             </button>
@@ -341,6 +452,7 @@ function Project() {
               }`}
               title="Dialogue"
               onClick={() => handleToolClick("dialogue")}
+              onMouseDown={handleToolMouseDown}
             >
               <i className="fa-regular fa-comment-dots" />
             </button>
@@ -350,6 +462,7 @@ function Project() {
               }`}
               title="Parenthetical"
               onClick={() => handleToolClick("parenthetical")}
+              onMouseDown={handleToolMouseDown}
             >
               <i className="fa-regular fa-face-smile" />
             </button>
@@ -359,6 +472,7 @@ function Project() {
               }`}
               title="Transition"
               onClick={() => handleToolClick("transition")}
+              onMouseDown={handleToolMouseDown}
             >
               <i className="fa-solid fa-arrow-right-arrow-left" />
             </button>
@@ -368,6 +482,7 @@ function Project() {
               }`}
               title="General"
               onClick={() => handleToolClick("general")}
+              onMouseDown={handleToolMouseDown}
             >
               <i className="fa-solid fa-grip-lines" />
             </button>
@@ -388,31 +503,47 @@ function Project() {
       {/* Main Content Area */}
       <main className="project-content">
         <div className="content-canvas">
-          <div
-            className="screenplay-editor"
-            ref={editorRef}
-            contentEditable
-            suppressContentEditableWarning={true}
-            onClick={handleEditorClick}
-          >
+          <div className="screenplay-editor" ref={editorRef}>
             {lines.map((line, idx) => (
-              <p
+              <div
                 key={line.id}
                 data-line-index={idx}
-                className={`screenplay-${line.style}`}
-                onClick={(e) => handleLineClick(e, idx)}
-                onInput={(e) => {
-                  const text = e.currentTarget.innerText.replace(/\n/g, "");
-                  setLines((prev) =>
-                    prev.map((ln, i) => (i === idx ? { ...ln, text } : ln))
-                  );
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.preventDefault();
-                }}
+                onMouseDown={() => handleDragMouseDown(idx)}
+                onMouseEnter={() => handleDragMouseEnter(idx)}
               >
-                {line.text}
-              </p>
+                <textarea
+                  data-line-index={idx}
+                  ref={(el) => {
+                    if (el) lineRefs.current[line.id] = el;
+                  }}
+                  className={`screenplay-${line.style}`}
+                  value={line.text}
+                  rows={1}
+                  onKeyDown={(e) => handleLineKeyDown(e, idx)}
+                  onChange={(e) => handleLineChange(e, idx)}
+                  onMouseDown={(e) => handleLineClick(e, idx)}
+                  onFocus={() => {
+                    setSelectionRange({
+                      start: idx,
+                      end: idx,
+                      isCollapsed: true,
+                    });
+                    setLastClickedIndex(idx);
+                  }}
+                  style={{
+                    border: "none",
+                    outline: "none",
+                    resize: "none",
+                    width: "100%",
+                    background: "transparent",
+                    overflow: "hidden",
+                    whiteSpace: "pre-wrap",
+                    wordWrap: "break-word",
+                    minHeight: "1.2em",
+                    height: "auto",
+                  }}
+                />
+              </div>
             ))}
           </div>
         </div>
