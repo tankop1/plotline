@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeProvider.jsx";
 import profileImg from "../assets/images/Profile Picture.jpeg";
 import brandIcon from "../assets/images/Plotline Icon.png";
@@ -11,6 +11,26 @@ function Project() {
   const [projectName, setProjectName] = useState("Untitled Project");
   const [isEditingName, setIsEditingName] = useState(false);
 
+  // Screenplay data model and selection
+  const [lines, setLines] = useState([
+    { id: "l1", text: "FADE IN:", style: "action" },
+    { id: "l2", text: "EXT. CITY STREET - DAY", style: "location" },
+    { id: "l3", text: "A bustling urban landscape...", style: "action" },
+    { id: "l4", text: "JOHN (30s) walks with purpose.", style: "action" },
+    { id: "l5", text: "He checks his watch.", style: "action" },
+    { id: "l6", text: "JOHN", style: "character" },
+    { id: "l7", text: "(muttering)", style: "parenthetical" },
+    { id: "l8", text: "I'm late again.", style: "dialogue" },
+  ]);
+  const [selectionRange, setSelectionRange] = useState({
+    start: 0,
+    end: 0,
+    isCollapsed: true,
+  });
+  const editorRef = useRef(null);
+  const [selectedLineIds, setSelectedLineIds] = useState([]);
+  const [lastClickedIndex, setLastClickedIndex] = useState(null);
+
   // Formatting types mapping
   const formattingTypes = [
     "location", // 1. Location - bold, left aligned
@@ -22,155 +42,94 @@ function Project() {
     "general", // 7. General - same as action (left aligned)
   ];
 
-  const applyFormatting = (formatType) => {
-    console.log("=== APPLY FORMATTING DEBUG START ===");
-    console.log("Format type:", formatType);
-
-    const selection = window.getSelection();
-    console.log("Selection range count:", selection.rangeCount);
-    if (selection.rangeCount === 0) return;
-
-    const range = selection.getRangeAt(0);
-    const selectedText = range.toString();
-    console.log("Selected text:", JSON.stringify(selectedText));
-    console.log("Selected text length:", selectedText.length);
-    console.log("Has line breaks:", selectedText.includes("\n"));
-
-    if (selectedText) {
-      // Find the paragraph or line element containing the selection
-      let container = range.commonAncestorContainer;
-      console.log("Initial container:", container);
-      console.log("Container node type:", container.nodeType);
-      console.log("Container node name:", container.nodeName);
-
-      // Walk up to find the block element (p, div, or span with screenplay class)
-      while (container && container.nodeType !== Node.ELEMENT_NODE) {
-        container = container.parentNode;
-        console.log("Walking up to element node, new container:", container);
-      }
-
-      console.log("After walking up to element, container:", container);
-      console.log("Container tag name:", container.tagName);
-      console.log("Container classes:", container.classList.toString());
-
-      // Find the immediate block element
-      while (container && !container.classList.contains("screenplay-editor")) {
-        console.log("Looking for block element, current container:", container);
-        console.log("Container tag:", container.tagName);
-        console.log("Container classes:", container.classList.toString());
-
-        if (
-          container.tagName === "P" ||
-          container.tagName === "DIV" ||
-          (container.tagName === "SPAN" &&
-            container.classList.toString().includes("screenplay-"))
-        ) {
-          console.log("Found block element, breaking");
-          break;
-        }
-        container = container.parentElement;
-        console.log("Moving to parent:", container);
-      }
-
-      console.log("Final container:", container);
-      console.log("Final container tag:", container.tagName);
-      console.log("Final container classes:", container.classList.toString());
-      console.log(
-        "Container has screenplay class:",
-        container && container.classList.toString().includes("screenplay-")
-      );
-      console.log(
-        "Container is screenplay editor:",
-        container && container.classList.contains("screenplay-editor")
-      );
-
+  // Selection and block utilities
+  const getClosestLineEl = (node) => {
+    let current = node;
+    while (current && current !== editorRef.current) {
       if (
-        container &&
-        container.classList.toString().includes("screenplay-") &&
-        !container.classList.contains("screenplay-editor")
-      ) {
-        console.log("PATH A: Replacing entire formatted element");
-        console.log(
-          "Container text content:",
-          JSON.stringify(container.textContent)
-        );
-        console.log(
-          "Container text content length:",
-          container.textContent.length
-        );
-
-        // Replace the entire formatted element
-        const newElement = document.createElement("span");
-        newElement.className = `screenplay-${formatType}`;
-        newElement.textContent = container.textContent;
-        console.log("New element created with class:", newElement.className);
-        console.log(
-          "New element text content:",
-          JSON.stringify(newElement.textContent)
-        );
-
-        container.parentNode.replaceChild(newElement, container);
-        console.log("Element replaced in DOM");
-
-        // Select the new element
-        const newRange = document.createRange();
-        newRange.selectNodeContents(newElement);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-        console.log("Selection restored to new element");
-      } else {
-        console.log("PATH B: Creating new formatted element for selected text");
-        console.log(
-          "Selected text for new element:",
-          JSON.stringify(selectedText)
-        );
-
-        // Create a new formatted element for the selected text
-        const span = document.createElement("span");
-        span.className = `screenplay-${formatType}`;
-        span.textContent = selectedText;
-        console.log("New span created with class:", span.className);
-        console.log("New span text content:", JSON.stringify(span.textContent));
-
-        range.deleteContents();
-        console.log("Range contents deleted");
-        range.insertNode(span);
-        console.log("New span inserted");
-
-        // Select the new element
-        const newRange = document.createRange();
-        newRange.selectNodeContents(span);
-        selection.removeAllRanges();
-        selection.addRange(newRange);
-        console.log("Selection restored to new span");
-      }
-    } else {
-      console.log("PATH C: No selected text, setting data attribute");
-      // Set formatting for new text
-      const editor = document.querySelector(".screenplay-editor");
-      if (editor) {
-        editor.setAttribute("data-current-format", formatType);
-        console.log("Data attribute set:", formatType);
-      }
+        current.nodeType === Node.ELEMENT_NODE &&
+        current.hasAttribute &&
+        current.hasAttribute("data-line-index")
+      )
+        return current;
+      current = current.parentNode;
     }
-    console.log("=== APPLY FORMATTING DEBUG END ===");
+    return null;
   };
 
-  const handleEditorClick = (e) => {
-    const target = e.target;
-    const formatClass = target.className.match(/screenplay-(\w+)/);
-    if (formatClass) {
-      const formatType = formatClass[1];
-      const toolIndex = formattingTypes.indexOf(formatType);
-      if (toolIndex !== -1) {
-        setSelectedTool(formatType);
-      }
+  const computeSelectionRange = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const aEl = getClosestLineEl(sel.anchorNode);
+    const fEl = getClosestLineEl(sel.focusNode);
+    if (!aEl || !fEl) return;
+    const a = parseInt(aEl.getAttribute("data-line-index"), 10);
+    const b = parseInt(fEl.getAttribute("data-line-index"), 10);
+    const start = Math.min(a, b);
+    const end = Math.max(a, b);
+    const isCollapsed = sel.isCollapsed && a === b;
+    setSelectionRange({ start, end, isCollapsed });
+    if (isCollapsed) setLastClickedIndex(start);
+  };
+
+  const selectionStyles = useMemo(() => {
+    const { start, end } = selectionRange;
+    const set = new Set();
+    for (let i = start; i <= end && i < lines.length; i++)
+      set.add(lines[i].style);
+    return set;
+  }, [selectionRange, lines]);
+
+  // Line-based style update (no grouping)
+  const applyStyleToSelection = (formatType) => {
+    const { start, end } = selectionRange;
+    const ids = selectedLineIds.length
+      ? new Set(selectedLineIds)
+      : new Set(
+          Array.from(
+            { length: end - start + 1 },
+            (_, i) => lines[start + i]?.id
+          )
+        );
+    setLines((prev) =>
+      prev.map((ln) => (ids.has(ln.id) ? { ...ln, style: formatType } : ln))
+    );
+  };
+
+  const handleEditorClick = () => {
+    computeSelectionRange();
+  };
+
+  const setBrowserSelectionForLines = (start, end) => {
+    const container = editorRef.current;
+    if (!container) return;
+    const startEl = container.querySelector(`[data-line-index="${start}"]`);
+    const endEl = container.querySelector(`[data-line-index="${end}"]`);
+    if (!startEl || !endEl) return;
+    const range = document.createRange();
+    range.setStart(startEl, 0);
+    range.setEnd(endEl, endEl.childNodes.length);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+
+  const handleLineClick = (e, idx) => {
+    if (e.shiftKey && lastClickedIndex !== null) {
+      const start = Math.min(lastClickedIndex, idx);
+      const end = Math.max(lastClickedIndex, idx);
+      setSelectionRange({ start, end, isCollapsed: start === end });
+      setBrowserSelectionForLines(start, end);
+    } else {
+      setSelectionRange({ start: idx, end: idx, isCollapsed: true });
+      setLastClickedIndex(idx);
+      // Do not programmatically select the whole line; let the browser place the caret
     }
   };
 
   const handleToolClick = (toolType) => {
+    applyStyleToSelection(toolType);
     setSelectedTool(toolType);
-    applyFormatting(toolType);
   };
 
   // Project name editing handlers
@@ -201,6 +160,67 @@ function Project() {
   const handleNameBlur = () => {
     setIsEditingName(false);
   };
+
+  // Sync toolbar highlight with selection styles
+  useEffect(() => {
+    if (selectionStyles.size === 1) {
+      const only = Array.from(selectionStyles)[0];
+      setSelectedTool(only);
+    } else {
+      setSelectedTool(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionStyles]);
+
+  // Keep selectedLineIds in sync with selectionRange
+  useEffect(() => {
+    const { start, end } = selectionRange;
+    const ids = [];
+    for (let i = start; i <= end && i < lines.length; i++)
+      ids.push(lines[i].id);
+    setSelectedLineIds(ids);
+  }, [selectionRange, lines]);
+
+  // Listen to selection changes to update selectionRange
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const container = editorRef.current;
+      if (!container) return;
+      const range = sel.getRangeAt(0);
+      if (
+        !container.contains(range.startContainer) &&
+        !container.contains(range.endContainer)
+      )
+        return;
+      const aEl = (node) => {
+        let cur = node;
+        while (cur && cur !== container) {
+          if (
+            cur.nodeType === Node.ELEMENT_NODE &&
+            cur.hasAttribute &&
+            cur.hasAttribute("data-line-index")
+          )
+            return cur;
+          cur = cur.parentNode;
+        }
+        return null;
+      };
+      const sEl = aEl(sel.anchorNode);
+      const eEl = aEl(sel.focusNode);
+      if (!sEl || !eEl) return;
+      const a = parseInt(sEl.getAttribute("data-line-index"), 10);
+      const b = parseInt(eEl.getAttribute("data-line-index"), 10);
+      const start = Math.min(a, b);
+      const end = Math.max(a, b);
+      const isCollapsed = sel.isCollapsed && a === b;
+      setSelectionRange({ start, end, isCollapsed });
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () =>
+      document.removeEventListener("selectionchange", onSelectionChange);
+  }, []);
 
   return (
     <div className="project-page">
@@ -370,18 +390,30 @@ function Project() {
         <div className="content-canvas">
           <div
             className="screenplay-editor"
+            ref={editorRef}
             contentEditable
             suppressContentEditableWarning={true}
             onClick={handleEditorClick}
           >
-            <p className="screenplay-action">FADE IN:</p>
-            <p className="screenplay-location">EXT. CITY STREET - DAY</p>
-            <p className="screenplay-action">A bustling urban landscape...</p>
-            <p className="screenplay-action">JOHN (30s) walks with purpose.</p>
-            <p className="screenplay-action">He checks his watch.</p>
-            <p className="screenplay-character">JOHN</p>
-            <p className="screenplay-parenthetical">(muttering)</p>
-            <p className="screenplay-dialogue">I'm late again.</p>
+            {lines.map((line, idx) => (
+              <p
+                key={line.id}
+                data-line-index={idx}
+                className={`screenplay-${line.style}`}
+                onClick={(e) => handleLineClick(e, idx)}
+                onInput={(e) => {
+                  const text = e.currentTarget.innerText.replace(/\n/g, "");
+                  setLines((prev) =>
+                    prev.map((ln, i) => (i === idx ? { ...ln, text } : ln))
+                  );
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+              >
+                {line.text}
+              </p>
+            ))}
           </div>
         </div>
       </main>
