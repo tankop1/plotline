@@ -1,15 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "../theme/ThemeProvider.jsx";
+import { useAuth } from "../theme/AuthProvider.jsx";
 import profileImg from "../assets/images/Profile Picture.jpeg";
 import brandIcon from "../assets/images/Plotline Icon.png";
+import {
+  createProject,
+  updateProject,
+  getProject,
+} from "../firebase/projects.js";
+import {
+  saveConversation,
+  loadConversation,
+} from "../firebase/conversations.js";
 // Using Font Awesome via kit in index.html
 
 function Project() {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("script");
   const [selectedTool, setSelectedTool] = useState("action");
   const [projectName, setProjectName] = useState("Untitled Project");
   const [isEditingName, setIsEditingName] = useState(false);
+  const [projectId, setProjectId] = useState(null);
+  const [isNewProject, setIsNewProject] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Screenplay data model and selection
   const [lines, setLines] = useState([
@@ -31,6 +45,16 @@ function Project() {
   const idCounterRef = useRef(8);
   const [selectedLineIds, setSelectedLineIds] = useState([]);
   const [lastClickedIndex, setLastClickedIndex] = useState(null);
+
+  // AI Panel state
+  const [aiMode, setAiMode] = useState("agent"); // "agent" or "ask"
+  const [aiMessages, setAiMessages] = useState([]);
+  const [aiInput, setAiInput] = useState("");
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [isLoadingProject, setIsLoadingProject] = useState(false);
+  const aiMessagesRef = useRef(null);
+  const loadedProjectIdRef = useRef(null);
+  const aiMessagesStateRef = useRef([]);
 
   // Formatting types mapping
   const formattingTypes = [
@@ -72,6 +96,120 @@ function Project() {
     if (idCounterRef.current < maxId) idCounterRef.current = maxId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Check if we're loading an existing project or creating a new one
+  useEffect(() => {
+    const checkProjectRoute = () => {
+      const hash = window.location.hash;
+      const projectMatch = hash.match(/#\/project\/(.+)/);
+
+      if (projectMatch) {
+        const id = projectMatch[1];
+        setProjectId(id);
+        setIsNewProject(false);
+        loadProject(id);
+      } else {
+        setProjectId(null);
+        setIsNewProject(true);
+        loadedProjectIdRef.current = null;
+        aiMessagesStateRef.current = [];
+        setAiMessages([]);
+      }
+    };
+
+    checkProjectRoute();
+    window.addEventListener("hashchange", checkProjectRoute);
+    return () => window.removeEventListener("hashchange", checkProjectRoute);
+  }, [user]); // Only run when user changes
+
+  // Load existing project
+  const loadProject = async (id) => {
+    if (!user || isLoadingProject) return;
+
+    setIsLoadingProject(true);
+    try {
+      const project = await getProject(id);
+      if (project && project.userId === user.uid) {
+        setProjectName(project.name || "Untitled Project");
+        setLines(
+          project.lines || [
+            { id: "l1", text: "FADE IN:", style: "action" },
+            { id: "l2", text: "EXT. CITY STREET - DAY", style: "location" },
+            {
+              id: "l3",
+              text: "A bustling urban landscape...",
+              style: "action",
+            },
+            {
+              id: "l4",
+              text: "JOHN (30s) walks with purpose.",
+              style: "action",
+            },
+            { id: "l5", text: "He checks his watch.", style: "action" },
+            { id: "l6", text: "JOHN", style: "character" },
+            { id: "l7", text: "(muttering)", style: "parenthetical" },
+            { id: "l8", text: "I'm late again.", style: "dialogue" },
+          ]
+        );
+
+        // Load AI conversation for this project (only if we haven't loaded it yet)
+        if (loadedProjectIdRef.current !== id) {
+          const conversation = await loadConversation(id);
+          aiMessagesStateRef.current = conversation;
+          setAiMessages(conversation);
+          loadedProjectIdRef.current = id;
+        }
+      }
+    } catch (error) {
+      console.error("Error loading project:", error);
+    } finally {
+      setIsLoadingProject(false);
+    }
+  };
+
+  // Auto-save functionality
+  const saveProject = async () => {
+    if (!user || isSaving) return;
+
+    setIsSaving(true);
+    try {
+      const projectData = {
+        name: projectName,
+        lines: lines,
+      };
+
+      if (isNewProject) {
+        const newProjectId = await createProject(user.uid, projectData);
+        setProjectId(newProjectId);
+        setIsNewProject(false);
+
+        // Save any existing AI conversation to the new project
+        if (aiMessagesStateRef.current.length > 0) {
+          await saveConversation(newProjectId, aiMessagesStateRef.current);
+        }
+
+        // Update URL to include project ID
+        window.location.hash = `#/project/${newProjectId}`;
+      } else {
+        await updateProject(projectId, projectData);
+      }
+    } catch (error) {
+      console.error("Error saving project:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Auto-save when project data changes (debounced)
+  useEffect(() => {
+    if (!user || !projectId || isLoadingProject) return; // Don't auto-save if no project ID or loading
+
+    const timeoutId = setTimeout(() => {
+      saveProject();
+    }, 2000); // Save 2 seconds after last change
+
+    return () => clearTimeout(timeoutId);
+  }, [projectName, lines, user, projectId, isNewProject, isLoadingProject]);
 
   // Centralized Enter handling for all line inputs
   const handleLineKeyDown = (e, idx) => {
@@ -269,6 +407,254 @@ function Project() {
     e.preventDefault();
   };
 
+  // AI Panel functions
+  const addAiMessage = (content, type = "assistant") => {
+    const message = {
+      id: Date.now() + Math.random(),
+      content,
+      type, // "user" or "assistant"
+      timestamp: new Date(),
+    };
+
+    // Update the ref first to ensure we have the latest state
+    aiMessagesStateRef.current = [...aiMessagesStateRef.current, message];
+
+    setAiMessages(aiMessagesStateRef.current);
+
+    // Save conversation to Firestore
+    if (projectId) {
+      saveConversation(projectId, aiMessagesStateRef.current).catch((error) => {
+        console.error("Error saving conversation:", error);
+      });
+    }
+
+    // Auto-scroll to bottom when new message is added
+    setTimeout(() => {
+      if (aiMessagesRef.current) {
+        aiMessagesRef.current.scrollTop = aiMessagesRef.current.scrollHeight;
+      }
+    }, 100);
+  };
+
+  const callGeminiAPI = async (prompt, mode) => {
+    const API_KEY = "AIzaSyBnD6pE3aHZ7SLLzdMKK2DN9S5Fd9QOThQ";
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: prompt,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.3,
+            topK: 20,
+            topP: 0.8,
+            maxOutputTokens: 1024,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.candidates[0].content.parts[0].text;
+    } catch (error) {
+      console.error("Error calling Gemini API:", error);
+      throw error;
+    }
+  };
+
+  const simulateAiResponse = async (userMessage, mode) => {
+    setIsAiProcessing(true);
+
+    try {
+      if (mode === "agent") {
+        // Agent Mode: Edit screenplay and explain actions
+        const screenplayContext = lines
+          .map((line) => `${line.style.toUpperCase()}: ${line.text}`)
+          .join("\n");
+
+        const agentPrompt = `You are a professional screenplay editor. The user wants you to edit their screenplay directly.
+
+CURRENT SCREENPLAY:
+${screenplayContext}
+
+USER REQUEST: ${userMessage}
+
+IMPORTANT: You must respond with ONLY a valid JSON object. No other text, no explanations, no markdown formatting.
+
+The JSON must have this exact structure:
+{
+  "explanation": "Brief explanation of what you're doing",
+  "edits": [
+    {
+      "type": "replace",
+      "lineId": "l8",
+      "newText": "New text content",
+      "style": "dialogue"
+    }
+  ]
+}
+
+For "replace" edits: Use the exact lineId from the screenplay above.
+For "add" edits: Use type "add", set lineId to null, and optionally use "insertAfter" with a lineId.
+
+Available styles: location, action, character, dialogue, parenthetical, transition, general
+
+RESPOND WITH ONLY THE JSON OBJECT:`;
+
+        const aiResponse = await callGeminiAPI(agentPrompt, mode);
+
+        // Clean the response to extract JSON
+        let cleanResponse = aiResponse.trim();
+
+        // Remove any markdown code blocks
+        if (cleanResponse.startsWith("```json")) {
+          cleanResponse = cleanResponse
+            .replace(/^```json\s*/, "")
+            .replace(/\s*```$/, "");
+        } else if (cleanResponse.startsWith("```")) {
+          cleanResponse = cleanResponse
+            .replace(/^```\s*/, "")
+            .replace(/\s*```$/, "");
+        }
+
+        // Try to find JSON in the response
+        const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          cleanResponse = jsonMatch[0];
+        }
+
+        try {
+          const parsedResponse = JSON.parse(cleanResponse);
+
+          if (parsedResponse.explanation && parsedResponse.edits) {
+            addAiMessage(parsedResponse.explanation, "assistant");
+
+            if (parsedResponse.edits && parsedResponse.edits.length > 0) {
+              applyScreenplayEdits(parsedResponse.edits);
+            }
+          } else {
+            throw new Error("Invalid response structure");
+          }
+        } catch (parseError) {
+          console.error("Error parsing AI response:", parseError);
+          console.error("Raw response:", aiResponse);
+          addAiMessage(
+            "I had trouble processing that request. Please try rephrasing it.",
+            "assistant"
+          );
+        }
+      } else {
+        // Ask Mode: Just answer questions
+        const askPrompt = `You are a professional screenwriting consultant. Answer the user's question about screenwriting in a helpful, informative way.
+
+USER QUESTION: ${userMessage}
+
+Provide a clear, concise answer about screenwriting best practices, formatting, structure, character development, dialogue, or any other screenwriting topic. Keep your response under 200 words.`;
+
+        const aiResponse = await callGeminiAPI(askPrompt, mode);
+        addAiMessage(aiResponse, "assistant");
+      }
+    } catch (error) {
+      console.error("AI request failed:", error);
+      addAiMessage(
+        "Sorry, I'm having trouble connecting right now. Please try again.",
+        "assistant"
+      );
+    }
+
+    setIsAiProcessing(false);
+  };
+
+  const applyScreenplayEdits = (edits) => {
+    if (!edits || !Array.isArray(edits)) return;
+
+    setLines((prev) => {
+      const newLines = [...prev];
+
+      edits.forEach((edit) => {
+        if (edit.type === "replace" && edit.lineId) {
+          // Replace existing line
+          const lineIndex = newLines.findIndex(
+            (line) => line.id === edit.lineId
+          );
+          if (lineIndex !== -1) {
+            newLines[lineIndex] = {
+              ...newLines[lineIndex],
+              text: edit.newText,
+              style: edit.style || newLines[lineIndex].style,
+            };
+          }
+        } else if (edit.type === "add") {
+          // Add new line
+          const newLine = {
+            id: generateLineId(),
+            text: edit.newText,
+            style: edit.style || "action",
+          };
+
+          if (edit.insertAfter) {
+            // Insert after specific line
+            const insertIndex = newLines.findIndex(
+              (line) => line.id === edit.insertAfter
+            );
+            if (insertIndex !== -1) {
+              newLines.splice(insertIndex + 1, 0, newLine);
+            } else {
+              // If insertAfter line not found, add to end
+              newLines.push(newLine);
+            }
+          } else {
+            // Add to end
+            newLines.push(newLine);
+          }
+        }
+      });
+
+      return newLines;
+    });
+  };
+
+  const handleAiSubmit = async (e) => {
+    e.preventDefault();
+    if (!aiInput.trim() || isAiProcessing) return;
+
+    const userMessage = aiInput.trim();
+    setAiInput(""); // Clear input immediately for better UX
+    addAiMessage(userMessage, "user");
+
+    await simulateAiResponse(userMessage, aiMode);
+  };
+
+  const handleAiInputChange = (e) => {
+    setAiInput(e.target.value);
+  };
+
+  const handleAiInputKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleAiSubmit(e);
+    }
+  };
+
+  const handleAiModeChange = (e) => {
+    setAiMode(e.target.value.toLowerCase().replace(" mode", ""));
+  };
+
   // Project name editing handlers
   const handleNameClick = () => {
     setIsEditingName(true);
@@ -395,6 +781,7 @@ function Project() {
         </nav>
 
         <div className="project-actions">
+          {isSaving && <span className="save-indicator">Saving...</span>}
           <button className="share-button">Share</button>
           <img className="project-avatar" src={profileImg} alt="Profile" />
         </div>
@@ -549,24 +936,84 @@ function Project() {
         </div>
       </main>
 
-      {/* Floating Input Box */}
-      <div className="floating-input">
-        <div className="input-container">
-          <textarea
-            placeholder="Write or edit anything..."
-            className="input-field"
-            rows={3}
-          />
-          <div className="input-footer">
-            <select className="agent-mode">
-              <option>Agent Mode</option>
-              <option>Ask Mode</option>
-            </select>
-            <button className="send-button" aria-label="Send">
-              <i className="fa-solid fa-arrow-up" />
-            </button>
-          </div>
+      {/* AI Panel */}
+      <div className="ai-panel">
+        <div className="ai-messages" ref={aiMessagesRef}>
+          {aiMessages.length === 0 && (
+            <div className="ai-welcome">
+              <p>Welcome! I'm your AI writing assistant.</p>
+              <p>
+                <strong>Agent Mode:</strong> I'll edit your screenplay directly
+              </p>
+              <p>
+                <strong>Ask Mode:</strong> I'll answer questions about
+                screenwriting
+              </p>
+            </div>
+          )}
+          {aiMessages.map((message) => (
+            <div
+              key={message.id}
+              className={`ai-message ai-message--${message.type}`}
+            >
+              <div className="ai-message-content">{message.content}</div>
+              <div className="ai-message-time">
+                {message.timestamp.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </div>
+            </div>
+          ))}
+          {isAiProcessing && (
+            <div className="ai-message ai-message--assistant">
+              <div className="ai-message-content ai-typing">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          )}
         </div>
+
+        <form className="ai-input-form" onSubmit={handleAiSubmit}>
+          <div className="ai-input-container">
+            <textarea
+              placeholder={
+                aiMode === "agent"
+                  ? "Tell me how to improve your screenplay..."
+                  : "Ask me anything about screenwriting..."
+              }
+              className="ai-input-field"
+              value={aiInput}
+              onChange={handleAiInputChange}
+              onKeyDown={handleAiInputKeyDown}
+              rows={3}
+              disabled={isAiProcessing}
+            />
+            <div className="ai-input-footer">
+              <select
+                className="ai-mode-select"
+                value={`${
+                  aiMode.charAt(0).toUpperCase() + aiMode.slice(1)
+                } Mode`}
+                onChange={handleAiModeChange}
+                disabled={isAiProcessing}
+              >
+                <option>Agent Mode</option>
+                <option>Ask Mode</option>
+              </select>
+              <button
+                className="ai-send-button"
+                type="submit"
+                disabled={!aiInput.trim() || isAiProcessing}
+                aria-label="Send message"
+              >
+                <i className="fa-solid fa-arrow-up" />
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   );
