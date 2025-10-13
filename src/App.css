@@ -249,6 +249,100 @@
   line-height: 1;
 }
 
+/* Popup menu for project card */
+.card-menu-popup {
+  position: absolute;
+  top: 225px; /* directly below the ellipsis button (16px top + ~30px button + gap) */
+  right: 12px;
+  background: var(--color-bg);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 6px;
+  z-index: 100; /* ensure above thumbnail */
+  min-width: 140px;
+  border: 1px solid var(--color-surface);
+}
+
+.card-menu-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.card-menu-item:hover {
+  background: var(--color-light-gray);
+}
+
+.card-menu-delete {
+  color: #d93025;
+}
+
+/* Confirm dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+
+.confirm-dialog {
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--color-surface);
+}
+
+.confirm-title {
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.confirm-message {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin-bottom: 16px;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirm-cancel {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.confirm-delete {
+  background: linear-gradient(90deg, var(--color-orange), var(--color-yellow));
+  color: var(--color-white);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+[data-theme="dark"] .card-menu-popup {
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
 .floating-add {
   position: fixed;
   right: 28px;
@@ -458,8 +552,15 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  width: 250px;
+  width: auto; /* allow title + status pill to fit without squishing */
   flex-shrink: 0;
+}
+
+.project-title-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .project-brand-icon {
@@ -477,11 +578,43 @@
   border-radius: 4px;
   padding: 2px 6px;
   transition: border-color 0.2s ease;
-  width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: auto; /* grow/shrink to fit text */
   flex-shrink: 0;
+}
+
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-light-gray);
+  border-radius: 999px;
+  padding: 4px 8px;
+  width: fit-content;
+  margin-top: 0;
+}
+
+.save-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2db37b; /* green default */
+}
+
+.save-status-dot.saving {
+  background: var(--color-orange);
+}
+
+.save-status-text {
+  font-size: 12px;
+  color: var(--color-black);
+}
+
+[data-theme="dark"] .save-status {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .save-status-text {
+  color: var(--color-text);
 }
 
 .project-name:hover {
@@ -497,14 +630,17 @@
   font-size: 18px;
   color: var(--color-text);
   outline: none;
-  width: 200px;
+  width: auto; /* grow/shrink to fit text while editing */
   flex-shrink: 0;
 }
 
 .project-nav {
   display: flex;
   gap: 0;
-  justify-self: center;
+  position: absolute; /* center relative to full header width */
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0; /* align tabs to the bottom of the header */
 }
 
 .nav-tab {
@@ -520,10 +656,18 @@
   cursor: pointer;
   transition: color 0.2s;
   position: relative;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .nav-tab:hover {
   color: var(--color-text);
+}
+
+.nav-tab:focus,
+.nav-tab:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .nav-tab--active:hover {
@@ -537,7 +681,7 @@
 .nav-tab--active::after {
   content: "";
   position: absolute;
-  bottom: 0;
+  bottom: -1px; /* sit on the light gray header divider */
   left: 0;
   right: 0;
   height: 2px;
@@ -555,6 +699,8 @@
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  justify-self: end; /* keep actions at top-right */
+  margin-right: -22px; /* nudge slightly to the right */
 }
 
 .share-button {
@@ -744,6 +890,53 @@
   height: 100%;
   outline: none;
   overflow-y: auto;
+}
+
+/* Skeleton loading */
+.skeleton-line {
+  height: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.06),
+    rgba(0, 0, 0, 0.12),
+    rgba(0, 0, 0, 0.06)
+  );
+  background-size: 200% 100%;
+  border-radius: 6px;
+  margin: 10px 0;
+  animation: skeleton-shimmer 1.2s infinite;
+}
+
+.skeleton-bubble {
+  height: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.06),
+    rgba(0, 0, 0, 0.12),
+    rgba(0, 0, 0, 0.06)
+  );
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: skeleton-shimmer 1.2s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+[data-theme="dark"] .skeleton-line,
+[data-theme="dark"] .skeleton-bubble {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.06)
+  );
 }
 
 .screenplay-title {
@@ -1081,6 +1274,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding-bottom: 15px; /* space below the most recent message */
 }
 
 .ai-welcome {
@@ -1124,22 +1318,34 @@
   word-wrap: break-word;
 }
 
+/* User messages: light gray background, black text */
 .ai-message--user .ai-message-content {
-  background: linear-gradient(90deg, var(--color-orange), var(--color-yellow));
-  color: var(--color-white);
+  background: var(--color-light-gray);
+  color: var(--color-black);
   border-radius: 12px 12px 4px 12px;
 }
 
+/* Assistant messages: no background, full width */
 .ai-message--assistant .ai-message-content {
-  background: var(--color-surface);
+  background: transparent;
   color: var(--color-text);
-  border-radius: 12px 12px 12px 4px;
+  border-radius: 0;
+  max-width: 100%;
+  width: 100%;
+  padding: 5px; /* increased vertical and horizontal padding */
+  padding-top: 0;
+  padding-bottom: 15px;
 }
 
 .ai-message-time {
-  font-size: 11px;
+  font-size: 10px; /* smaller timestamps */
   color: var(--color-muted);
   padding: 0 4px;
+}
+
+/* Hide timestamps on assistant messages */
+.ai-message--assistant .ai-message-time {
+  display: none;
 }
 
 .ai-typing {
@@ -1289,7 +1495,7 @@
 }
 
 [data-theme="dark"] .ai-message--assistant .ai-message-content {
-  background: rgba(255, 255, 255, 0.05);
+  background: transparent;
 }
 
 [data-theme="dark"] .ai-input-form {

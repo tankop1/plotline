@@ -107,6 +107,7 @@ function Project() {
         const id = projectMatch[1];
         setProjectId(id);
         setIsNewProject(false);
+        setIsLoadingProject(true);
         loadProject(id);
       } else {
         setProjectId(null);
@@ -338,10 +339,12 @@ function Project() {
 
   // Auto-resize textarea based on content
   const autoResize = (textarea) => {
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = textarea.scrollHeight + "px";
-    }
+    if (!textarea) return;
+    // Temporarily reset height to measure scrollHeight accurately
+    textarea.style.height = "auto";
+    // Use max to avoid collapsing on very short lines
+    const next = Math.max(textarea.scrollHeight, 18);
+    textarea.style.height = next + "px";
   };
 
   // Centralized text update for lines
@@ -405,6 +408,74 @@ function Project() {
   const handleToolMouseDown = (e) => {
     // Prevent toolbar buttons from taking focus away from textarea
     e.preventDefault();
+  };
+
+  // Generate a print-ready HTML for PDF export
+  const handleDownloadPdf = () => {
+    const printable = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${
+      projectName ? String(projectName).replace(/</g, "&lt;") : "Screenplay"
+    }</title>
+    <style>
+      @page { size: Letter; margin: 1in; }
+      * { box-sizing: border-box; }
+      html, body { padding: 0; margin: 0; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .page { width: 8.5in; height: 11in; }
+      .doc {
+        font-family: 'Courier Prime', Courier, monospace;
+        font-size: 16px;
+        line-height: 1.1;
+        color: #000;
+        width: 8.5in; height: 11in;
+        padding: 0.5in 1in 1in 0;
+      }
+      /* title removed */
+      .line { margin: 0; padding: 0; white-space: pre-wrap; }
+      .location { font-weight: bold; text-transform: uppercase; padding: 10px 0; }
+      .action { }
+      .character { text-transform: uppercase; padding-top: 10px; position: relative; left: 4.2in; }
+      .dialogue { position: relative; left: 2.9in; }
+      .parenthetical { position: relative; left: 3.7in; }
+      .transition { text-align: right; }
+      .general { }
+      @media print { .noprint { display: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="doc">
+        ${lines
+          .map((ln) => {
+            const cls = (ln.style || "action")
+              .replace("location", "location")
+              .replace("action", "action")
+              .replace("character", "character")
+              .replace("dialogue", "dialogue")
+              .replace("parenthetical", "parenthetical")
+              .replace("transition", "transition")
+              .replace("general", "general");
+            const safe = String(ln.text || "")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;");
+            return `<div class="line ${cls}">${safe}</div>`;
+          })
+          .join("")}
+      </div>
+    </div>
+    <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 300); };</script>
+  </body>
+</html>`;
+
+    const blob = new Blob([printable], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (!win) {
+      alert("Please allow popups to download the PDF.");
+    }
   };
 
   // AI Panel functions
@@ -704,15 +775,19 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
     setSelectedLineIds(ids);
   }, [selectionRange, lines]);
 
-  // Auto-resize textareas when lines change
+  // Auto-resize textareas when lines change, after paint
   useEffect(() => {
-    lines.forEach((line) => {
-      const textarea = lineRefs.current[line.id];
-      if (textarea) {
-        autoResize(textarea);
-      }
+    if (isLoadingProject) return;
+    const rafId = requestAnimationFrame(() => {
+      lines.forEach((line) => {
+        const textarea = lineRefs.current[line.id];
+        if (textarea) {
+          autoResize(textarea);
+        }
+      });
     });
-  }, [lines]);
+    return () => cancelAnimationFrame(rafId);
+  }, [lines, isLoadingProject]);
 
   // With controlled inputs, we drive selection via focus and shift-click
 
@@ -728,25 +803,36 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
             onClick={() => (window.location.hash = "#/")}
             style={{ cursor: "pointer" }}
           />
-          {isEditingName ? (
-            <input
-              type="text"
-              value={projectName}
-              onChange={handleNameChange}
-              onKeyDown={handleNameKeyDown}
-              onBlur={handleNameBlur}
-              className="project-name project-name--editing"
-              autoFocus
-            />
-          ) : (
-            <span
-              className="project-name"
-              onClick={handleNameClick}
-              style={{ cursor: "pointer" }}
-            >
-              {projectName}
-            </span>
-          )}
+          <div className="project-title-wrap">
+            {isEditingName ? (
+              <input
+                type="text"
+                value={projectName}
+                onChange={handleNameChange}
+                onKeyDown={handleNameKeyDown}
+                onBlur={handleNameBlur}
+                className="project-name project-name--editing"
+                autoFocus
+              />
+            ) : (
+              <span
+                className="project-name"
+                onClick={handleNameClick}
+                style={{ cursor: "pointer" }}
+              >
+                {projectName}
+              </span>
+            )}
+            <div className="save-status">
+              <span
+                className={`save-status-dot ${isSaving ? "saving" : "saved"}`}
+                aria-hidden
+              />
+              <span className="save-status-text">
+                {isSaving ? "Saving..." : "Up to date"}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Main Navigation Tabs */}
@@ -781,7 +867,6 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
         </nav>
 
         <div className="project-actions">
-          {isSaving && <span className="save-indicator">Saving...</span>}
           <button className="share-button">Share</button>
           <img className="project-avatar" src={profileImg} alt="Profile" />
         </div>
@@ -880,7 +965,7 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
           <button className="toolbar-icon" title="Conversation">
             <i className="fa-regular fa-comments" />
           </button>
-          <button className="download-button">
+          <button className="download-button" onClick={handleDownloadPdf}>
             <i className="fa-solid fa-download download-icon" />
             Download
           </button>
@@ -891,47 +976,59 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
       <main className="project-content">
         <div className="content-canvas">
           <div className="screenplay-editor" ref={editorRef}>
-            {lines.map((line, idx) => (
-              <div
-                key={line.id}
-                data-line-index={idx}
-                onMouseDown={() => handleDragMouseDown(idx)}
-                onMouseEnter={() => handleDragMouseEnter(idx)}
-              >
-                <textarea
-                  data-line-index={idx}
-                  ref={(el) => {
-                    if (el) lineRefs.current[line.id] = el;
-                  }}
-                  className={`screenplay-${line.style}`}
-                  value={line.text}
-                  rows={1}
-                  onKeyDown={(e) => handleLineKeyDown(e, idx)}
-                  onChange={(e) => handleLineChange(e, idx)}
-                  onMouseDown={(e) => handleLineClick(e, idx)}
-                  onFocus={() => {
-                    setSelectionRange({
-                      start: idx,
-                      end: idx,
-                      isCollapsed: true,
-                    });
-                    setLastClickedIndex(idx);
-                  }}
-                  style={{
-                    border: "none",
-                    outline: "none",
-                    resize: "none",
-                    width: "100%",
-                    background: "transparent",
-                    overflow: "hidden",
-                    whiteSpace: "pre-wrap",
-                    wordWrap: "break-word",
-                    minHeight: "1.2em",
-                    height: "auto",
-                  }}
-                />
+            {isLoadingProject ? (
+              <div>
+                {Array.from({ length: 14 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="skeleton-line"
+                    style={{ width: `${70 + (i % 5) * 5}%` }}
+                  />
+                ))}
               </div>
-            ))}
+            ) : (
+              lines.map((line, idx) => (
+                <div
+                  key={line.id}
+                  data-line-index={idx}
+                  onMouseDown={() => handleDragMouseDown(idx)}
+                  onMouseEnter={() => handleDragMouseEnter(idx)}
+                >
+                  <textarea
+                    data-line-index={idx}
+                    ref={(el) => {
+                      if (el) lineRefs.current[line.id] = el;
+                    }}
+                    className={`screenplay-${line.style}`}
+                    value={line.text}
+                    rows={1}
+                    onKeyDown={(e) => handleLineKeyDown(e, idx)}
+                    onChange={(e) => handleLineChange(e, idx)}
+                    onMouseDown={(e) => handleLineClick(e, idx)}
+                    onFocus={() => {
+                      setSelectionRange({
+                        start: idx,
+                        end: idx,
+                        isCollapsed: true,
+                      });
+                      setLastClickedIndex(idx);
+                    }}
+                    style={{
+                      border: "none",
+                      outline: "none",
+                      resize: "none",
+                      width: "100%",
+                      background: "transparent",
+                      overflow: "hidden",
+                      whiteSpace: "pre-wrap",
+                      wordWrap: "break-word",
+                      minHeight: "1.2em",
+                      height: "auto",
+                    }}
+                  />
+                </div>
+              ))
+            )}
           </div>
         </div>
       </main>
@@ -939,40 +1036,62 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
       {/* AI Panel */}
       <div className="ai-panel">
         <div className="ai-messages" ref={aiMessagesRef}>
-          {aiMessages.length === 0 && (
-            <div className="ai-welcome">
-              <p>Welcome! I'm your AI writing assistant.</p>
-              <p>
-                <strong>Agent Mode:</strong> I'll edit your screenplay directly
-              </p>
-              <p>
-                <strong>Ask Mode:</strong> I'll answer questions about
-                screenwriting
-              </p>
-            </div>
-          )}
-          {aiMessages.map((message) => (
-            <div
-              key={message.id}
-              className={`ai-message ai-message--${message.type}`}
-            >
-              <div className="ai-message-content">{message.content}</div>
-              <div className="ai-message-time">
-                {message.timestamp.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
-            </div>
-          ))}
-          {isAiProcessing && (
-            <div className="ai-message ai-message--assistant">
-              <div className="ai-message-content ai-typing">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            </div>
+          {isLoadingProject ? (
+            <>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="ai-message ai-message--assistant">
+                  <div className="ai-message-content">
+                    <div
+                      className="skeleton-bubble"
+                      style={{ width: `${85 - i * 10}%` }}
+                    />
+                    <div
+                      className="skeleton-bubble"
+                      style={{ width: `${65 - i * 8}%`, marginTop: 6 }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {aiMessages.length === 0 && (
+                <div className="ai-welcome">
+                  <p>Welcome! I'm your AI writing assistant.</p>
+                  <p>
+                    <strong>Agent Mode:</strong> I'll edit your screenplay
+                    directly
+                  </p>
+                  <p>
+                    <strong>Ask Mode:</strong> I'll answer questions about
+                    screenwriting
+                  </p>
+                </div>
+              )}
+              {aiMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`ai-message ai-message--${message.type}`}
+                >
+                  <div className="ai-message-content">{message.content}</div>
+                  <div className="ai-message-time">
+                    {message.timestamp.toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+              ))}
+              {isAiProcessing && (
+                <div className="ai-message ai-message--assistant">
+                  <div className="ai-message-content ai-typing">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 

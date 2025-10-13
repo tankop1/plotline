@@ -6,7 +6,11 @@ import brandIcon from "./assets/images/Plotline Icon.png";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import Project from "./pages/Project.jsx";
-import { getUserProjects, createProject } from "./firebase/projects.js";
+import {
+  getUserProjects,
+  createProject,
+  deleteProject,
+} from "./firebase/projects.js";
 import "./App.css";
 
 function App() {
@@ -17,6 +21,9 @@ function App() {
   const [projects, setProjects] = useState([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [openMenuProjectId, setOpenMenuProjectId] = useState(null);
+  const [confirmDeleteProjectId, setConfirmDeleteProjectId] = useState(null);
+  const [deletingProject, setDeletingProject] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 0);
@@ -277,9 +284,87 @@ function App() {
                       : "Recently"}
                   </div>
                 </div>
-                <button className="card-menu" aria-label="Project menu">
+                <button
+                  className="card-menu"
+                  aria-label="Project menu"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuProjectId((prev) =>
+                      prev === project.id ? null : project.id
+                    );
+                  }}
+                >
                   ⋮
                 </button>
+                {openMenuProjectId === project.id && (
+                  <div
+                    className="card-menu-popup"
+                    onClick={(e) => e.stopPropagation()}
+                    role="menu"
+                  >
+                    <button
+                      className="card-menu-item card-menu-delete"
+                      role="menuitem"
+                      onClick={() => {
+                        setOpenMenuProjectId(null);
+                        setConfirmDeleteProjectId(project.id);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+                {confirmDeleteProjectId === project.id && (
+                  <div
+                    className="confirm-overlay"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div
+                      className="confirm-dialog"
+                      role="dialog"
+                      aria-modal="true"
+                    >
+                      <div className="confirm-title">Delete project?</div>
+                      <div className="confirm-message">
+                        Are you sure you want to delete "
+                        {project.name || "Untitled Project"}"? This action
+                        cannot be undone.
+                      </div>
+                      <div className="confirm-actions">
+                        <button
+                          className="confirm-cancel"
+                          onClick={() => setConfirmDeleteProjectId(null)}
+                          disabled={deletingProject}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="confirm-delete"
+                          onClick={async () => {
+                            if (deletingProject) return;
+                            setDeletingProject(true);
+                            try {
+                              await deleteProject(project.id);
+                              setProjects((prev) =>
+                                prev.filter((p) => p.id !== project.id)
+                              );
+                            } catch (err) {
+                              console.error("Failed to delete project", err);
+                              alert(
+                                "Failed to delete project. Please try again."
+                              );
+                            } finally {
+                              setDeletingProject(false);
+                              setConfirmDeleteProjectId(null);
+                            }
+                          }}
+                        >
+                          {deletingProject ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </article>
             ))
           )}
