@@ -867,6 +867,7 @@
   position: relative;
   border-radius: 25px; /* rounded gray container */
   overflow-y: auto; /* make gray container scrollable */
+  overflow-x: hidden; /* prevent horizontal scrolling */
   border: 3px solid var(--color-light-gray);
 }
 
@@ -879,6 +880,7 @@
   height: 11in;
   box-shadow: none;
   text-align: left;
+  overflow-x: hidden; /* prevent horizontal scrolling */
 }
 
 .screenplay-editor {
@@ -890,6 +892,7 @@
   height: 100%;
   outline: none;
   overflow-y: auto;
+  overflow-x: hidden; /* prevent horizontal scrolling */
 }
 
 /* Skeleton loading */
@@ -1313,7 +1316,7 @@
   max-width: 85%;
   padding: 12px 16px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.4;
   word-wrap: break-word;
 }
@@ -1335,6 +1338,80 @@
   padding: 5px; /* increased vertical and horizontal padding */
   padding-top: 0;
   padding-bottom: 15px;
+}
+
+/* Markdown styling for Ask Mode responses */
+.ai-message--assistant .ai-message-content h1,
+.ai-message--assistant .ai-message-content h2,
+.ai-message--assistant .ai-message-content h3 {
+  font-family: "DM Sans", sans-serif;
+  font-weight: 600;
+  margin: 8px 0 4px 0;
+  color: var(--color-text);
+  text-align: left !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+  position: relative;
+  left: 0 !important;
+}
+
+.ai-message--assistant .ai-message-content h1 {
+  font-size: 14px;
+}
+
+.ai-message--assistant .ai-message-content h2 {
+  font-size: 13px;
+}
+
+.ai-message--assistant .ai-message-content h3 {
+  font-size: 12px;
+}
+
+.ai-message--assistant .ai-message-content p {
+  margin: 6px 0;
+  text-align: left !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+.ai-message--assistant .ai-message-content strong {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.ai-message--assistant .ai-message-content em {
+  font-style: italic;
+  color: var(--color-text);
+}
+
+.ai-message--assistant .ai-message-content ul,
+.ai-message--assistant .ai-message-content ol {
+  margin: 6px 0;
+  padding-left: 20px;
+  text-align: left;
+}
+
+.ai-message--assistant .ai-message-content li {
+  margin: 1px 0;
+  list-style-type: disc;
+  text-align: left;
+}
+
+.ai-message--assistant .ai-message-content br {
+  line-height: 1.4;
+}
+
+/* Force all markdown elements to be left-aligned */
+.ai-message--assistant .ai-message-content * {
+  text-align: left !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* Exception for lists - they need left padding */
+.ai-message--assistant .ai-message-content ul,
+.ai-message--assistant .ai-message-content ol {
+  padding-left: 20px !important;
 }
 
 .ai-message-time {
@@ -1483,6 +1560,373 @@
 .ai-send-button i {
   font-size: 12px;
   color: var(--color-white);
+}
+
+/* Table read highlighting */
+.screenplay-line-container.speaking {
+  background: rgba(255, 165, 0, 0.1);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.word-highlight-overlay {
+  z-index: 1;
+}
+
+.text-display-overlay {
+  z-index: 0;
+}
+
+/* Dark mode adjustments for table read */
+[data-theme="dark"] .screenplay-line-container.speaking {
+  background: rgba(255, 165, 0, 0.15);
+}
+
+/* Name Generator Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.name-generator-modal {
+  background: var(--color-bg);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-surface);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--color-surface);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.modal-close:hover {
+  color: var(--color-text);
+}
+
+.modal-content {
+  padding: 24px;
+}
+
+.input-group {
+  margin-bottom: 20px;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.name-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--color-surface);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.name-input:focus {
+  border-color: var(--color-orange);
+}
+
+.name-input::placeholder {
+  color: var(--color-muted);
+}
+
+.generate-button {
+  width: 100%;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, var(--color-orange), var(--color-yellow));
+  color: var(--color-white);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-bottom: 20px;
+}
+
+.generate-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.generate-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.generated-names h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.generated-names ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.name-item {
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.name-item:hover {
+  background: var(--color-light-gray);
+}
+
+.name-item:last-child {
+  margin-bottom: 0;
+}
+
+.name-text {
+  flex: 1;
+  cursor: pointer;
+}
+
+.copy-name-button {
+  background: transparent;
+  border: none;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.copy-name-button:hover {
+  background: var(--color-light-gray);
+  color: var(--color-text);
+}
+
+.copy-name-button i {
+  font-size: 12px;
+}
+
+/* Script Analysis Modal */
+.script-analysis-modal {
+  background: var(--color-bg);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-surface);
+}
+
+.analysis-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-surface);
+  border-top: 3px solid var(--color-orange);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.analysis-loading p {
+  color: var(--color-text);
+  font-size: 16px;
+  margin: 0;
+}
+
+.script-analysis-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.script-analysis-content h1,
+.script-analysis-content h2,
+.script-analysis-content h3 {
+  font-family: "DM Sans", sans-serif;
+  font-weight: 600;
+  margin: 8px 0 4px 0;
+  color: var(--color-text);
+  text-align: left !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+  position: relative;
+  left: 0 !important;
+}
+
+.script-analysis-content h1 {
+  font-size: 20px;
+  border-bottom: 2px solid var(--color-orange);
+  padding-bottom: 2px;
+  margin-top: 10px;
+}
+
+.script-analysis-content h2 {
+  font-size: 16px;
+  color: var(--color-orange);
+}
+
+.script-analysis-content h3 {
+  font-size: 16px;
+}
+
+.script-analysis-content p {
+  margin: 6px 0;
+  text-align: left !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+.script-analysis-content ul,
+.script-analysis-content ol {
+  margin: 6px 0;
+  padding-left: 20px;
+  text-align: left;
+}
+
+.script-analysis-content li {
+  margin: 1px 0;
+  text-align: left;
+}
+
+.script-analysis-content strong {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.script-analysis-content em {
+  font-style: italic;
+  color: var(--color-text);
+}
+
+/* Force all markdown elements to be left-aligned */
+.script-analysis-content * {
+  text-align: left !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* Exception for lists - they need left padding */
+.script-analysis-content ul,
+.script-analysis-content ol {
+  padding-left: 20px !important;
+}
+
+.analysis-error {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-text);
+}
+
+.analysis-error p {
+  margin: 0;
+  font-size: 16px;
+}
+
+/* Dark mode adjustments for modal */
+[data-theme="dark"] .name-generator-modal,
+[data-theme="dark"] .script-analysis-modal {
+  background: var(--color-surface);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .modal-header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .name-input {
+  background: var(--color-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .name-input:focus {
+  border-color: var(--color-orange);
+}
+
+[data-theme="dark"] .name-item {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .name-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .copy-name-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .loading-spinner {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: var(--color-orange);
 }
 
 /* Dark mode adjustments for AI panel */

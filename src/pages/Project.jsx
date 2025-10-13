@@ -56,6 +56,25 @@ function Project() {
   const loadedProjectIdRef = useRef(null);
   const aiMessagesStateRef = useRef([]);
 
+  // Table read state
+  const [isTableReadPlaying, setIsTableReadPlaying] = useState(false);
+  const [currentSpeakingLine, setCurrentSpeakingLine] = useState(null);
+  const [currentSpeakingWord, setCurrentSpeakingWord] = useState(null);
+  const [tableReadQueue, setTableReadQueue] = useState([]);
+  const currentUtteranceRef = useRef(null);
+  const isPlayingRef = useRef(false);
+
+  // Name generator modal state
+  const [isNameGeneratorOpen, setIsNameGeneratorOpen] = useState(false);
+  const [nameDescription, setNameDescription] = useState("");
+  const [generatedNames, setGeneratedNames] = useState([]);
+  const [isGeneratingNames, setIsGeneratingNames] = useState(false);
+
+  // Script analysis modal state
+  const [isScriptAnalysisOpen, setIsScriptAnalysisOpen] = useState(false);
+  const [scriptAnalysis, setScriptAnalysis] = useState("");
+  const [isAnalyzingScript, setIsAnalyzingScript] = useState(false);
+
   // Formatting types mapping
   const formattingTypes = [
     "location", // 1. Location - bold, left aligned
@@ -410,6 +429,413 @@ function Project() {
     e.preventDefault();
   };
 
+  // Table read functions
+  const getVoiceForCharacter = (characterName) => {
+    // Simple gender inference from names
+    const maleNames = [
+      "JOHN",
+      "JAMES",
+      "MICHAEL",
+      "DAVID",
+      "ROBERT",
+      "WILLIAM",
+      "CHRIS",
+      "ALEX",
+      "SAM",
+      "TOM",
+      "BOB",
+      "JACK",
+      "HENRY",
+      "PETER",
+      "PAUL",
+      "MARK",
+      "STEVE",
+      "BEN",
+      "DAN",
+      "MATT",
+      "NICK",
+      "JOE",
+      "FRANK",
+      "GEORGE",
+      "CHARLES",
+      "ANTHONY",
+      "KEVIN",
+      "BRIAN",
+      "EDWARD",
+      "RONALD",
+      "TIMOTHY",
+      "JASON",
+      "JEFFREY",
+      "RYAN",
+      "JACOB",
+      "GARY",
+      "NICHOLAS",
+      "ERIC",
+      "JONATHAN",
+      "STEPHEN",
+      "LARRY",
+      "JUSTIN",
+      "SCOTT",
+      "BRANDON",
+      "BENJAMIN",
+      "SAMUEL",
+      "GREGORY",
+      "ALEXANDER",
+      "PATRICK",
+      "JACK",
+      "DENNIS",
+      "JERRY",
+      "TYLER",
+      "AARON",
+      "JOSE",
+      "HENRY",
+      "ADAM",
+      "DOUGLAS",
+      "NATHAN",
+      "PETER",
+      "ZACHARY",
+      "KYLE",
+      "WALTER",
+      "HAROLD",
+      "CARL",
+      "JEREMY",
+      "KEITH",
+      "ROGER",
+      "GERALD",
+      "ETHAN",
+      "ARTHUR",
+      "TERRY",
+      "CHRISTIAN",
+      "SEAN",
+      "LAWRENCE",
+      "AUSTIN",
+      "JOE",
+      "NOAH",
+      "JESSE",
+      "ALBERT",
+      "BRYAN",
+      "BILLY",
+      "BRUCE",
+      "RALPH",
+      "GABRIEL",
+      "ROY",
+      "JUAN",
+      "WAYNE",
+      "EUGENE",
+      "LOUIS",
+      "PHILIP",
+      "BOBBY",
+      "JOHNNY",
+      "BRADLEY",
+    ];
+
+    const femaleNames = [
+      "SARAH",
+      "MARY",
+      "JENNIFER",
+      "LISA",
+      "AMANDA",
+      "JESSICA",
+      "ASHLEY",
+      "EMILY",
+      "MELISSA",
+      "NICOLE",
+      "ELIZABETH",
+      "HEATHER",
+      "AMY",
+      "ANGELA",
+      "MICHELLE",
+      "KIMBERLY",
+      "DONNA",
+      "DEBORAH",
+      "SANDRA",
+      "CAROL",
+      "RUTH",
+      "SHARON",
+      "BARBARA",
+      "HELEN",
+      "NANCY",
+      "BETTY",
+      "DOROTHY",
+      "KAREN",
+      "SUSAN",
+      "MARGARET",
+      "PATRICIA",
+      "LINDA",
+      "CYNTHIA",
+      "MARIA",
+      "JANET",
+      "CATHERINE",
+      "FRANCES",
+      "CHRISTINE",
+      "SAMANTHA",
+      "DEBRA",
+      "RACHEL",
+      "CAROLYN",
+      "JANET",
+      "VIRGINIA",
+      "MARIA",
+      "HEATHER",
+      "DIANE",
+      "JULIE",
+      "JOYCE",
+      "VICTORIA",
+      "KELLY",
+      "CHRISTINA",
+      "JOAN",
+      "EVELYN",
+      "JUDITH",
+      "ANDREA",
+      "HANNAH",
+      "JACQUELINE",
+      "MARTHA",
+      "GLORIA",
+      "TERESA",
+      "SARA",
+      "JANICE",
+      "JULIA",
+      "MARIE",
+      "MADISON",
+      "GRACE",
+      "JUDY",
+      "THERESA",
+      "BEVERLY",
+      "DENISE",
+      "MARILYN",
+      "AMBER",
+      "DANIELLE",
+      "ROSE",
+      "BRENDA",
+      "DIANA",
+      "ABIGAIL",
+      "JANE",
+      "LYNN",
+      "LORI",
+      "ALICE",
+      "HELEN",
+      "SANDRA",
+      "DONNA",
+      "CAROL",
+      "RUTH",
+      "SHARON",
+      "MICHELLE",
+      "LAURA",
+      "SARAH",
+      "KIMBERLY",
+      "DEBORAH",
+      "DOROTHY",
+      "LISA",
+      "NANCY",
+      "KAREN",
+      "BETTY",
+      "HELEN",
+      "SANDRA",
+      "DONNA",
+      "CAROL",
+      "RUTH",
+      "SHARON",
+      "MICHELLE",
+      "LAURA",
+      "SARAH",
+      "KIMBERLY",
+      "DEBORAH",
+      "DOROTHY",
+      "LISA",
+      "NANCY",
+      "KAREN",
+      "BETTY",
+      "HELEN",
+      "SANDRA",
+      "DONNA",
+      "CAROL",
+      "RUTH",
+      "SHARON",
+      "MICHELLE",
+      "LAURA",
+      "SARAH",
+      "KIMBERLY",
+      "DEBORAH",
+      "DOROTHY",
+      "LISA",
+      "NANCY",
+      "KAREN",
+      "BETTY",
+    ];
+
+    const name = characterName.toUpperCase().trim();
+
+    // Check if it's a known male or female name
+    const isMale = maleNames.some((n) => name.includes(n));
+    const isFemale = femaleNames.some((n) => name.includes(n));
+
+    // Fallback heuristic for unknown names
+    let inferredGender = "neutral";
+    if (isMale) {
+      inferredGender = "male";
+    } else if (isFemale) {
+      inferredGender = "female";
+    } else {
+      // Simple heuristic: short names (1-4 chars) often male, longer often female
+      if (name.length <= 4 && /^[A-Z]+$/.test(name)) {
+        inferredGender = "male";
+      } else if (name.length > 6) {
+        inferredGender = "female";
+      }
+    }
+
+    const voices = speechSynthesis.getVoices();
+
+    // Try to find a voice that matches the inferred gender
+    let selectedVoice = voices.find(
+      (voice) =>
+        voice.lang.startsWith("en") &&
+        ((inferredGender === "male" &&
+          (voice.name.toLowerCase().includes("male") ||
+            voice.name.toLowerCase().includes("man") ||
+            voice.name.toLowerCase().includes("david") ||
+            voice.name.toLowerCase().includes("alex"))) ||
+          (inferredGender === "female" &&
+            (voice.name.toLowerCase().includes("female") ||
+              voice.name.toLowerCase().includes("woman") ||
+              voice.name.toLowerCase().includes("samantha") ||
+              voice.name.toLowerCase().includes("susan"))))
+    );
+
+    // Fallback to any English voice
+    if (!selectedVoice) {
+      selectedVoice = voices.find((voice) => voice.lang.startsWith("en"));
+    }
+
+    // Final fallback to first available voice
+    return selectedVoice || voices[0];
+  };
+
+  const parseScreenplayForTableRead = () => {
+    const dialoguePairs = [];
+    let currentCharacter = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (line.style === "character") {
+        currentCharacter = line.text.trim();
+      } else if (
+        line.style === "dialogue" &&
+        currentCharacter &&
+        line.text.trim()
+      ) {
+        dialoguePairs.push({
+          character: currentCharacter,
+          dialogue: line.text.trim(),
+          lineIndex: i,
+          lineId: line.id,
+        });
+      } else if (line.style !== "parenthetical") {
+        // Reset character when we hit action, location, etc.
+        currentCharacter = null;
+      }
+    }
+
+    return dialoguePairs;
+  };
+
+  const speakWithHighlighting = (
+    text,
+    character,
+    lineId,
+    onWordStart,
+    onComplete
+  ) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voice = getVoiceForCharacter(character);
+
+    if (voice) {
+      utterance.voice = voice;
+    }
+
+    utterance.rate = 0.9; // Slightly slower for better comprehension
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    utterance.onend = () => {
+      onComplete();
+    };
+
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event.error);
+      onComplete();
+    };
+
+    currentUtteranceRef.current = utterance;
+    speechSynthesis.speak(utterance);
+  };
+
+  const startTableRead = () => {
+    if (isTableReadPlaying) {
+      // Stop current table read
+      speechSynthesis.cancel();
+      if (currentUtteranceRef.current) {
+        currentUtteranceRef.current = null;
+      }
+      setIsTableReadPlaying(false);
+      isPlayingRef.current = false;
+      setCurrentSpeakingLine(null);
+      setCurrentSpeakingWord(null);
+      setTableReadQueue([]);
+      return;
+    }
+
+    const dialoguePairs = parseScreenplayForTableRead();
+
+    if (dialoguePairs.length === 0) {
+      alert("No dialogue found in the screenplay to read.");
+      return;
+    }
+
+    setIsTableReadPlaying(true);
+    isPlayingRef.current = true;
+    setTableReadQueue(dialoguePairs);
+
+    // Start with the first dialogue
+    speakNextDialogue(dialoguePairs, 0);
+  };
+
+  const speakNextDialogue = (dialoguePairs, index) => {
+    // Check if table read was stopped using ref for immediate check
+    if (!isPlayingRef.current) {
+      return;
+    }
+
+    if (index >= dialoguePairs.length) {
+      // Table read complete
+      setIsTableReadPlaying(false);
+      isPlayingRef.current = false;
+      setCurrentSpeakingLine(null);
+      setCurrentSpeakingWord(null);
+      setTableReadQueue([]);
+      return;
+    }
+
+    const dialogue = dialoguePairs[index];
+    setCurrentSpeakingLine(dialogue.lineId);
+
+    speakWithHighlighting(
+      dialogue.dialogue,
+      dialogue.character,
+      dialogue.lineId,
+      null, // No word highlighting callback
+      () => {
+        setCurrentSpeakingWord(null);
+        // Move to next dialogue after a short pause, but only if still playing
+        setTimeout(() => {
+          if (isPlayingRef.current) {
+            speakNextDialogue(dialoguePairs, index + 1);
+          }
+        }, 500);
+      }
+    );
+  };
+
   // Generate a print-ready HTML for PDF export
   const handleDownloadPdf = () => {
     const printable = `<!DOCTYPE html>
@@ -511,6 +937,9 @@ function Project() {
     const API_KEY = "AIzaSyBnD6pE3aHZ7SLLzdMKK2DN9S5Fd9QOThQ";
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
 
+    // Increase token limit for script analysis
+    const maxTokens = mode === "script-analysis" ? 4096 : 1024;
+
     try {
       const response = await fetch(API_URL, {
         method: "POST",
@@ -531,7 +960,7 @@ function Project() {
             temperature: 0.3,
             topK: 20,
             topP: 0.8,
-            maxOutputTokens: 1024,
+            maxOutputTokens: maxTokens,
           },
         }),
       });
@@ -630,12 +1059,24 @@ RESPOND WITH ONLY THE JSON OBJECT:`;
           );
         }
       } else {
-        // Ask Mode: Just answer questions
-        const askPrompt = `You are a professional screenwriting consultant. Answer the user's question about screenwriting in a helpful, informative way.
+        // Ask Mode: Analyze screenplay and provide feedback
+        const screenplayContext = lines
+          .map((line) => `${line.style.toUpperCase()}: ${line.text}`)
+          .join("\n");
+
+        const askPrompt = `You are a professional screenwriting consultant. The user has asked a question about their screenplay and wants your expert feedback.
+
+CURRENT SCREENPLAY:
+${screenplayContext}
 
 USER QUESTION: ${userMessage}
 
-Provide a clear, concise answer about screenwriting best practices, formatting, structure, character development, dialogue, or any other screenwriting topic. Keep your response under 200 words.`;
+Provide concise, constructive feedback about their screenplay. Focus on the most important points:
+- Key strengths and weaknesses
+- Specific areas for improvement
+- Actionable suggestions
+
+Be specific and reference actual content from their screenplay when relevant. Keep your response focused and practical, under 200 words.`;
 
         const aiResponse = await callGeminiAPI(askPrompt, mode);
         addAiMessage(aiResponse, "assistant");
@@ -726,6 +1167,167 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
     setAiMode(e.target.value.toLowerCase().replace(" mode", ""));
   };
 
+  // Name generator functions
+  const openNameGenerator = () => {
+    setIsNameGeneratorOpen(true);
+    setNameDescription("");
+    setGeneratedNames([]);
+  };
+
+  const closeNameGenerator = () => {
+    setIsNameGeneratorOpen(false);
+    setNameDescription("");
+    setGeneratedNames([]);
+  };
+
+  const generateNames = async () => {
+    if (!nameDescription.trim()) return;
+
+    setIsGeneratingNames(true);
+    try {
+      const prompt = `Generate 5 character names based on this description: "${nameDescription}"
+
+Requirements:
+- Provide exactly 5 names
+- Make them appropriate for a screenplay
+- Consider the description's characteristics (age, nationality, personality, etc.)
+- Use realistic, memorable names
+- Format as a simple list, one name per line
+
+Names:`;
+
+      const response = await callGeminiAPI(prompt, "ask");
+
+      // Parse the response to extract names
+      const names = response
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(
+          (line) => line && !line.match(/^(names?|character|description):/i)
+        )
+        .slice(0, 5);
+
+      setGeneratedNames(names);
+    } catch (error) {
+      console.error("Error generating names:", error);
+      setGeneratedNames(["Error generating names. Please try again."]);
+    } finally {
+      setIsGeneratingNames(false);
+    }
+  };
+
+  const copyNameToClipboard = async (name) => {
+    try {
+      // Remove asterisk and space from the beginning if present
+      const cleanName = name.replace(/^\*\s*/, "");
+      await navigator.clipboard.writeText(cleanName);
+      // You could add a toast notification here if desired
+    } catch (error) {
+      console.error("Failed to copy name:", error);
+    }
+  };
+
+  // Script analysis functions
+  const openScriptAnalysis = () => {
+    setIsScriptAnalysisOpen(true);
+    setScriptAnalysis("");
+    analyzeScript();
+  };
+
+  const closeScriptAnalysis = () => {
+    setIsScriptAnalysisOpen(false);
+    setScriptAnalysis("");
+  };
+
+  const analyzeScript = async () => {
+    setIsAnalyzingScript(true);
+    setScriptAnalysis("");
+
+    try {
+      // Construct screenplay text from lines array
+      const screenplayText = lines.map((line) => line.text).join("\n");
+
+      const prompt = `Please provide a comprehensive analysis of this screenplay. Structure your response with the following sections in markdown format:
+
+## **Script Overview**
+- Brief summary of the story
+- Genre and tone
+- Target audience
+
+## **Character Analysis**
+- Main characters and their roles
+- Character development and arcs
+- Dialogue quality and voice
+
+## **Structure & Pacing**
+- Act structure analysis
+- Pacing assessment
+- Scene transitions
+
+## **Strengths**
+- What works well in the script
+- Strong elements to build upon
+
+## **Areas for Improvement**
+- Specific suggestions for enhancement
+- Weaknesses to address
+
+## **Technical Notes**
+- Formatting observations
+- Industry standard compliance
+
+## **Overall Assessment**
+- Final thoughts and recommendations
+- Next steps for development
+
+Please analyze this screenplay:
+
+${screenplayText}`;
+
+      const response = await callGeminiAPI(prompt, "script-analysis");
+      setScriptAnalysis(response);
+    } catch (error) {
+      console.error("Error analyzing script:", error);
+      console.error("Error details:", error.message);
+      setScriptAnalysis(
+        `Error analyzing script: ${error.message}. Please try again.`
+      );
+    } finally {
+      setIsAnalyzingScript(false);
+    }
+  };
+
+  // Simple markdown formatter for Ask Mode responses
+  const formatMarkdown = (text) => {
+    return (
+      text
+        // Bold text **text** or __text__
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/__(.*?)__/g, "<strong>$1</strong>")
+        // Italic text *text* or _text_
+        .replace(/\*(.*?)\*/g, "<em>$1</em>")
+        .replace(/_(.*?)_/g, "<em>$1</em>")
+        // Headers ## Header
+        .replace(/^### (.*$)/gim, "<h3>$1</h3>")
+        .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+        .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+        // Bullet points - item or * item
+        .replace(/^[\s]*[-*] (.*$)/gim, "<li>$1</li>")
+        // Numbered lists 1. item
+        .replace(/^[\s]*\d+\. (.*$)/gim, "<li>$1</li>")
+        // Line breaks
+        .replace(/\n/g, "<br>")
+        // Wrap consecutive <li> elements in <ul>
+        .replace(/(<li>.*<\/li>)/g, (match) => {
+          const listItems = match.match(/<li>.*?<\/li>/g);
+          if (listItems && listItems.length > 1) {
+            return `<ul>${match}</ul>`;
+          }
+          return match;
+        })
+    );
+  };
+
   // Project name editing handlers
   const handleNameClick = () => {
     setIsEditingName(true);
@@ -788,6 +1390,34 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
     });
     return () => cancelAnimationFrame(rafId);
   }, [lines, isLoadingProject]);
+
+  // Load voices when component mounts
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        console.log(
+          "Available voices:",
+          voices.map((v) => v.name)
+        );
+      }
+    };
+
+    // Load voices immediately
+    loadVoices();
+
+    // Also load when voices change (some browsers load them asynchronously)
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    return () => {
+      // Cleanup: stop any ongoing speech when component unmounts
+      if (isTableReadPlaying) {
+        speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   // With controlled inputs, we drive selection via focus and shift-click
 
@@ -875,16 +1505,28 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
       {/* Secondary Toolbar */}
       <div className="project-toolbar">
         <div className="toolbar-left">
-          <button className="table-read-button">
-            <i className="fa-regular fa-circle-play play-icon" />
-            Start a table read
+          <button className="table-read-button" onClick={startTableRead}>
+            <i
+              className={`fa-regular ${
+                isTableReadPlaying ? "fa-circle-stop" : "fa-circle-play"
+              } play-icon`}
+            />
+            {isTableReadPlaying ? "Stop table read" : "Start a table read"}
           </button>
 
           <div className="toolbar-icons">
-            <button className="toolbar-icon" title="Random">
+            <button
+              className="toolbar-icon"
+              title="Name Generator"
+              onClick={openNameGenerator}
+            >
               <i className="fa-solid fa-dice" />
             </button>
-            <button className="toolbar-icon" title="Clipboard">
+            <button
+              className="toolbar-icon"
+              title="Script Analysis"
+              onClick={openScriptAnalysis}
+            >
               <i className="fa-regular fa-clipboard" />
             </button>
             <div className="toolbar-divider"></div>
@@ -994,38 +1636,47 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
                   onMouseDown={() => handleDragMouseDown(idx)}
                   onMouseEnter={() => handleDragMouseEnter(idx)}
                 >
-                  <textarea
-                    data-line-index={idx}
-                    ref={(el) => {
-                      if (el) lineRefs.current[line.id] = el;
-                    }}
-                    className={`screenplay-${line.style}`}
-                    value={line.text}
-                    rows={1}
-                    onKeyDown={(e) => handleLineKeyDown(e, idx)}
-                    onChange={(e) => handleLineChange(e, idx)}
-                    onMouseDown={(e) => handleLineClick(e, idx)}
-                    onFocus={() => {
-                      setSelectionRange({
-                        start: idx,
-                        end: idx,
-                        isCollapsed: true,
-                      });
-                      setLastClickedIndex(idx);
-                    }}
-                    style={{
-                      border: "none",
-                      outline: "none",
-                      resize: "none",
-                      width: "100%",
-                      background: "transparent",
-                      overflow: "hidden",
-                      whiteSpace: "pre-wrap",
-                      wordWrap: "break-word",
-                      minHeight: "1.2em",
-                      height: "auto",
-                    }}
-                  />
+                  <div
+                    className={`screenplay-line-container ${
+                      currentSpeakingLine === line.id &&
+                      line.style === "dialogue"
+                        ? "speaking"
+                        : ""
+                    }`}
+                  >
+                    <textarea
+                      data-line-index={idx}
+                      ref={(el) => {
+                        if (el) lineRefs.current[line.id] = el;
+                      }}
+                      className={`screenplay-${line.style}`}
+                      value={line.text}
+                      rows={1}
+                      onKeyDown={(e) => handleLineKeyDown(e, idx)}
+                      onChange={(e) => handleLineChange(e, idx)}
+                      onMouseDown={(e) => handleLineClick(e, idx)}
+                      onFocus={() => {
+                        setSelectionRange({
+                          start: idx,
+                          end: idx,
+                          isCollapsed: true,
+                        });
+                        setLastClickedIndex(idx);
+                      }}
+                      style={{
+                        border: "none",
+                        outline: "none",
+                        resize: "none",
+                        width: "100%",
+                        background: "transparent",
+                        overflow: "hidden",
+                        whiteSpace: "pre-wrap",
+                        wordWrap: "break-word",
+                        minHeight: "1.2em",
+                        height: "auto",
+                      }}
+                    />
+                  </div>
                 </div>
               ))
             )}
@@ -1073,7 +1724,14 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
                   key={message.id}
                   className={`ai-message ai-message--${message.type}`}
                 >
-                  <div className="ai-message-content">{message.content}</div>
+                  <div
+                    className="ai-message-content"
+                    dangerouslySetInnerHTML={
+                      message.type === "assistant"
+                        ? { __html: formatMarkdown(message.content) }
+                        : { __html: message.content }
+                    }
+                  />
                   <div className="ai-message-time">
                     {message.timestamp.toLocaleTimeString([], {
                       hour: "2-digit",
@@ -1134,6 +1792,104 @@ Provide a clear, concise answer about screenwriting best practices, formatting, 
           </div>
         </form>
       </div>
+
+      {/* Name Generator Modal */}
+      {isNameGeneratorOpen && (
+        <div className="modal-overlay" onClick={closeNameGenerator}>
+          <div
+            className="name-generator-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>Name Generator</h3>
+              <button className="modal-close" onClick={closeNameGenerator}>
+                <i className="fa-solid fa-times" />
+              </button>
+            </div>
+
+            <div className="modal-content">
+              <div className="input-group">
+                <label htmlFor="name-description">
+                  Describe the character:
+                </label>
+                <input
+                  id="name-description"
+                  type="text"
+                  value={nameDescription}
+                  onChange={(e) => setNameDescription(e.target.value)}
+                  placeholder="A handsome, menacing man from Italy"
+                  className="name-input"
+                />
+              </div>
+
+              <button
+                className="generate-button"
+                onClick={generateNames}
+                disabled={!nameDescription.trim() || isGeneratingNames}
+              >
+                {isGeneratingNames ? "Generating..." : "Generate Names"}
+              </button>
+
+              {generatedNames.length > 0 && (
+                <div className="generated-names">
+                  <h4>Generated Names:</h4>
+                  <ul>
+                    {generatedNames.map((name, index) => (
+                      <li key={index} className="name-item">
+                        <span className="name-text">{name}</span>
+                        <button
+                          className="copy-name-button"
+                          onClick={() => copyNameToClipboard(name)}
+                          title="Copy name"
+                        >
+                          <i className="fa-solid fa-copy" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Script Analysis Modal */}
+      {isScriptAnalysisOpen && (
+        <div className="modal-overlay" onClick={closeScriptAnalysis}>
+          <div
+            className="script-analysis-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>Script Analysis</h3>
+              <button className="modal-close" onClick={closeScriptAnalysis}>
+                <i className="fa-solid fa-times" />
+              </button>
+            </div>
+
+            <div className="modal-content">
+              {isAnalyzingScript ? (
+                <div className="analysis-loading">
+                  <div className="loading-spinner"></div>
+                  <p>Analyzing your script...</p>
+                </div>
+              ) : scriptAnalysis ? (
+                <div
+                  className="script-analysis-content"
+                  dangerouslySetInnerHTML={{
+                    __html: formatMarkdown(scriptAnalysis),
+                  }}
+                />
+              ) : (
+                <div className="analysis-error">
+                  <p>Failed to load analysis. Please try again.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
