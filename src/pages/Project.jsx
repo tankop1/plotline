@@ -75,6 +75,16 @@ function Project() {
   const [scriptAnalysis, setScriptAnalysis] = useState("");
   const [isAnalyzingScript, setIsAnalyzingScript] = useState(false);
 
+  // Plan modal state
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [planData, setPlanData] = useState({
+    filmTitle: "",
+    logLine: "",
+    outline: "",
+    additionalNotes: "",
+  });
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
+
   // Formatting types mapping
   const formattingTypes = [
     "location", // 1. Location - bold, left aligned
@@ -171,6 +181,11 @@ function Project() {
             { id: "l8", text: "I'm late again.", style: "dialogue" },
           ]
         );
+
+        // Load plan data if available
+        if (project.planData) {
+          setPlanData(project.planData);
+        }
 
         // Load AI conversation for this project (only if we haven't loaded it yet)
         if (loadedProjectIdRef.current !== id) {
@@ -987,10 +1002,27 @@ function Project() {
           .map((line) => `${line.style.toUpperCase()}: ${line.text}`)
           .join("\n");
 
+        // Get plan data for context
+        const planContext =
+          planData.filmTitle ||
+          planData.logLine ||
+          planData.outline ||
+          planData.additionalNotes
+            ? `\n\nPROJECT CONTEXT:\n${
+                planData.filmTitle ? `Title: ${planData.filmTitle}\n` : ""
+              }${planData.logLine ? `Log Line: ${planData.logLine}\n` : ""}${
+                planData.outline ? `Outline: ${planData.outline}\n` : ""
+              }${
+                planData.additionalNotes
+                  ? `Additional Notes: ${planData.additionalNotes}`
+                  : ""
+              }`
+            : "";
+
         const agentPrompt = `You are a professional screenplay editor. The user wants you to edit their screenplay directly.
 
 CURRENT SCREENPLAY:
-${screenplayContext}
+${screenplayContext}${planContext}
 
 USER REQUEST: ${userMessage}
 
@@ -1064,10 +1096,27 @@ RESPOND WITH ONLY THE JSON OBJECT:`;
           .map((line) => `${line.style.toUpperCase()}: ${line.text}`)
           .join("\n");
 
+        // Get plan data for context
+        const planContext =
+          planData.filmTitle ||
+          planData.logLine ||
+          planData.outline ||
+          planData.additionalNotes
+            ? `\n\nPROJECT CONTEXT:\n${
+                planData.filmTitle ? `Title: ${planData.filmTitle}\n` : ""
+              }${planData.logLine ? `Log Line: ${planData.logLine}\n` : ""}${
+                planData.outline ? `Outline: ${planData.outline}\n` : ""
+              }${
+                planData.additionalNotes
+                  ? `Additional Notes: ${planData.additionalNotes}`
+                  : ""
+              }`
+            : "";
+
         const askPrompt = `You are a professional screenwriting consultant. The user has asked a question about their screenplay and wants your expert feedback.
 
 CURRENT SCREENPLAY:
-${screenplayContext}
+${screenplayContext}${planContext}
 
 USER QUESTION: ${userMessage}
 
@@ -1247,6 +1296,23 @@ Names:`;
       // Construct screenplay text from lines array
       const screenplayText = lines.map((line) => line.text).join("\n");
 
+      // Get plan data for context
+      const planContext =
+        planData.filmTitle ||
+        planData.logLine ||
+        planData.outline ||
+        planData.additionalNotes
+          ? `\n\nPROJECT CONTEXT:\n${
+              planData.filmTitle ? `Title: ${planData.filmTitle}\n` : ""
+            }${planData.logLine ? `Log Line: ${planData.logLine}\n` : ""}${
+              planData.outline ? `Outline: ${planData.outline}\n` : ""
+            }${
+              planData.additionalNotes
+                ? `Additional Notes: ${planData.additionalNotes}`
+                : ""
+            }`
+          : "";
+
       const prompt = `Please provide a comprehensive analysis of this screenplay. Structure your response with the following sections in markdown format:
 
 ## **Script Overview**
@@ -1282,7 +1348,7 @@ Names:`;
 
 Please analyze this screenplay:
 
-${screenplayText}`;
+${screenplayText}${planContext}`;
 
       const response = await callGeminiAPI(prompt, "script-analysis");
       setScriptAnalysis(response);
@@ -1294,6 +1360,39 @@ ${screenplayText}`;
       );
     } finally {
       setIsAnalyzingScript(false);
+    }
+  };
+
+  // Plan modal functions
+  const openPlanModal = () => {
+    setIsPlanModalOpen(true);
+    // Plan data is already loaded when project loads
+  };
+
+  const closePlanModal = () => {
+    setIsPlanModalOpen(false);
+  };
+
+  const handlePlanInputChange = (field, value) => {
+    setPlanData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const savePlanData = async () => {
+    if (!projectId) return;
+
+    setIsSavingPlan(true);
+    try {
+      await updateProject(projectId, { planData });
+      // Show success message or close modal
+      closePlanModal();
+    } catch (error) {
+      console.error("Error saving plan data:", error);
+      alert("Failed to save plan data. Please try again.");
+    } finally {
+      setIsSavingPlan(false);
     }
   };
 
@@ -1471,7 +1570,7 @@ ${screenplayText}`;
             className={`nav-tab ${
               activeTab === "plan" ? "nav-tab--active" : ""
             }`}
-            onClick={() => setActiveTab("plan")}
+            onClick={openPlanModal}
           >
             <i className="fa-regular fa-window-restore nav-icon" />
             Plan
@@ -1886,6 +1985,86 @@ ${screenplayText}`;
                   <p>Failed to load analysis. Please try again.</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Modal */}
+      {isPlanModalOpen && (
+        <div className="modal-overlay" onClick={closePlanModal}>
+          <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Project Plan</h3>
+              <button className="modal-close" onClick={closePlanModal}>
+                <i className="fa-solid fa-times" />
+              </button>
+            </div>
+
+            <div className="modal-content">
+              <div className="input-group">
+                <label htmlFor="film-title">Film Title</label>
+                <input
+                  id="film-title"
+                  type="text"
+                  value={planData.filmTitle}
+                  onChange={(e) =>
+                    handlePlanInputChange("filmTitle", e.target.value)
+                  }
+                  placeholder="Enter the film title"
+                  className="plan-input"
+                />
+              </div>
+
+              <div className="input-group">
+                <label htmlFor="log-line">Log Line</label>
+                <input
+                  id="log-line"
+                  type="text"
+                  value={planData.logLine}
+                  onChange={(e) =>
+                    handlePlanInputChange("logLine", e.target.value)
+                  }
+                  placeholder="A one-sentence summary of your story"
+                  className="plan-input"
+                />
+              </div>
+
+              <div className="input-group">
+                <label htmlFor="outline">Outline</label>
+                <textarea
+                  id="outline"
+                  value={planData.outline}
+                  onChange={(e) =>
+                    handlePlanInputChange("outline", e.target.value)
+                  }
+                  placeholder="Write your story outline here..."
+                  className="plan-textarea"
+                  rows={6}
+                />
+              </div>
+
+              <div className="input-group">
+                <label htmlFor="additional-notes">Additional Notes</label>
+                <textarea
+                  id="additional-notes"
+                  value={planData.additionalNotes}
+                  onChange={(e) =>
+                    handlePlanInputChange("additionalNotes", e.target.value)
+                  }
+                  placeholder="Any additional notes, character descriptions, themes, etc."
+                  className="plan-textarea"
+                  rows={4}
+                />
+              </div>
+
+              <button
+                className="save-plan-button"
+                onClick={savePlanData}
+                disabled={isSavingPlan}
+              >
+                {isSavingPlan ? "Saving..." : "Save Plan"}
+              </button>
             </div>
           </div>
         </div>

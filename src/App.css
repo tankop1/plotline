@@ -1892,9 +1892,89 @@
   font-size: 16px;
 }
 
+/* Plan Modal */
+.plan-modal {
+  background: var(--color-bg);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--color-surface);
+}
+
+.plan-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--color-surface);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.plan-input:focus {
+  border-color: var(--color-orange);
+}
+
+.plan-input::placeholder {
+  color: var(--color-muted);
+}
+
+.plan-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--color-surface);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.plan-textarea:focus {
+  border-color: var(--color-orange);
+}
+
+.plan-textarea::placeholder {
+  color: var(--color-muted);
+}
+
+.save-plan-button {
+  width: 100%;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, var(--color-orange), var(--color-yellow));
+  color: var(--color-white);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin-top: 20px;
+}
+
+.save-plan-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.save-plan-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Dark mode adjustments for modal */
 [data-theme="dark"] .name-generator-modal,
-[data-theme="dark"] .script-analysis-modal {
+[data-theme="dark"] .script-analysis-modal,
+[data-theme="dark"] .plan-modal {
   background: var(--color-surface);
   border-color: rgba(255, 255, 255, 0.1);
 }
@@ -1909,6 +1989,24 @@
 }
 
 [data-theme="dark"] .name-input:focus {
+  border-color: var(--color-orange);
+}
+
+[data-theme="dark"] .plan-input {
+  background: var(--color-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .plan-input:focus {
+  border-color: var(--color-orange);
+}
+
+[data-theme="dark"] .plan-textarea {
+  background: var(--color-bg);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .plan-textarea:focus {
   border-color: var(--color-orange);
 }
 
